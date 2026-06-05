@@ -73,11 +73,12 @@ export function AdminPanel() {
 function ScheduleMatchesView() {
   const { teams } = useBetting();
   const [date, setDate] = useState("");
+  const [location, setLocation] = useState("");
   const [homeTeamId, setHomeTeamId] = useState("");
   const [awayTeamId, setAwayTeamId] = useState("");
 
   const handleCreate = async () => {
-    if (!date || !homeTeamId || !awayTeamId) return alert("Fill all fields");
+    if (!date || !homeTeamId || !awayTeamId) return alert("Fill all required fields");
     if (homeTeamId === awayTeamId)
       return alert("Home and away teams must be different");
 
@@ -87,9 +88,11 @@ function ScheduleMatchesView() {
         homeTeamId,
         status: "scheduled",
         date,
+        location: location || "TBD",
       });
       alert("Match scheduled successfully!");
       setDate("");
+      setLocation("");
       setHomeTeamId("");
       setAwayTeamId("");
     } catch (e) {
@@ -99,69 +102,98 @@ function ScheduleMatchesView() {
   };
 
   return (
-    <div className="glass-card p-6 md:p-8 space-y-6">
+    <div className="glass-card p-6 md:p-8 space-y-8">
       <div>
         <h2 className="text-2xl font-black italic uppercase text-white mb-1">
-          Schedule Matches
+          Schedule Match
         </h2>
         <p className="text-white/40 font-medium text-sm">
           Create an upcoming match to add to the simulation queue.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="flex flex-col gap-2">
-          <label className="text-xs text-white/40 font-bold uppercase tracking-widest">
-            Match Date / Time
-          </label>
-          <input
-            type="datetime-local"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="w-full bg-black/40 border border-white/10 rounded-lg py-3 px-4 text-sm text-white focus:outline-none focus:border-[#c1ff00] transition-colors"
-          />
+      <div className="space-y-6">
+        <div className="space-y-4">
+          <h3 className="text-sm font-bold uppercase tracking-widest text-[#c1ff00] border-b border-white/10 pb-2">
+            General Information
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="flex flex-col gap-2">
+              <label className="text-xs text-white/40 font-bold uppercase tracking-widest">
+                Match Date / Time *
+              </label>
+              <input
+                type="datetime-local"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="w-full bg-black/40 border border-white/10 rounded-lg py-3 px-4 text-sm text-white focus:outline-none focus:border-[#c1ff00] transition-colors"
+                required
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-xs text-white/40 font-bold uppercase tracking-widest">
+                Location
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Madison Square Garden"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                className="w-full bg-black/40 border border-white/10 rounded-lg py-3 px-4 text-sm text-white focus:outline-none focus:border-[#c1ff00] transition-colors placeholder:text-white/20"
+              />
+            </div>
+          </div>
         </div>
 
-        <div className="flex flex-col gap-2">
-          <label className="text-xs text-white/40 font-bold uppercase tracking-widest">
-            Away Team
-          </label>
-          <select
-            value={awayTeamId}
-            onChange={(e) => setAwayTeamId(e.target.value)}
-            className="w-full bg-black/40 border border-white/10 rounded-lg py-3 px-4 text-sm text-white focus:outline-none focus:border-[#c1ff00] transition-colors appearance-none"
-          >
-            <option value="">Select Away Team</option>
-            {teams.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        <div className="space-y-4">
+          <h3 className="text-sm font-bold uppercase tracking-widest text-[#c1ff00] border-b border-white/10 pb-2">
+            Team Selection
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 bg-white/5 rounded-xl border border-white/10">
+            <div className="flex flex-col gap-2">
+              <label className="text-xs text-white/40 font-bold uppercase tracking-widest flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-[#2563eb]"></span> Away Team *
+              </label>
+              <select
+                value={awayTeamId}
+                onChange={(e) => setAwayTeamId(e.target.value)}
+                className="w-full bg-black/60 border border-white/10 rounded-lg py-3 px-4 text-sm text-white focus:outline-none focus:border-[#c1ff00] transition-colors appearance-none"
+                required
+              >
+                <option value="">Select Away Team</option>
+                {teams.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-        <div className="flex flex-col gap-2">
-          <label className="text-xs text-white/40 font-bold uppercase tracking-widest">
-            Home Team
-          </label>
-          <select
-            value={homeTeamId}
-            onChange={(e) => setHomeTeamId(e.target.value)}
-            className="w-full bg-black/40 border border-white/10 rounded-lg py-3 px-4 text-sm text-white focus:outline-none focus:border-[#c1ff00] transition-colors appearance-none"
-          >
-            <option value="">Select Home Team</option>
-            {teams.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
+            <div className="flex flex-col gap-2">
+              <label className="text-xs text-white/40 font-bold uppercase tracking-widest flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-[#dc2626]"></span> Home Team *
+              </label>
+              <select
+                value={homeTeamId}
+                onChange={(e) => setHomeTeamId(e.target.value)}
+                className="w-full bg-black/60 border border-white/10 rounded-lg py-3 px-4 text-sm text-white focus:outline-none focus:border-[#c1ff00] transition-colors appearance-none"
+                required
+              >
+                <option value="">Select Home Team</option>
+                {teams.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
         </div>
       </div>
 
       <button
         onClick={handleCreate}
-        className="w-full py-4 bg-[#c1ff00] text-black font-black uppercase italic rounded-xl text-lg hover:scale-[0.98] transition-all shadow-[0_0_15px_rgba(193,255,0,0.2)] mt-4"
+        className="w-full py-4 bg-[#c1ff00] text-black font-black uppercase italic rounded-xl text-lg hover:scale-[0.98] transition-all shadow-[0_0_15px_rgba(193,255,0,0.2)] mt-8"
       >
         Schedule Match
       </button>
