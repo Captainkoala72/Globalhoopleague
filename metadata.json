@@ -1,0 +1,8 @@
+{
+  "name": "Global Hoop Land Betting Simulator",
+  "description": "A simulated sports betting platform for a custom 8-team Hoopland league, by xVex.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

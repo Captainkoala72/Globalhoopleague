@@ -1,0 +1,95 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // -------------------------------------------------------------------------
+    // CORE PRIMITIVES & VALIDATION
+    // -------------------------------------------------------------------------
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(userId) { return request.auth.uid == userId; }
+    function isAdmin() { return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'; }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+
+    // -------------------------------------------------------------------------
+    // SCHEMA BLUEPRINTS
+    // -------------------------------------------------------------------------
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['email', 'role', 'balance']) &&
+             data.email is string && data.email.size() <= 200 &&
+             data.role in ['bettor', 'admin'] &&
+             data.balance is number;
+    }
+
+    function isValidTeam(data) {
+      return data.keys().hasAll(['name', 'conference', 'stats']) &&
+             data.name is string && data.name.size() <= 100 &&
+             data.conference in ['USA', 'World'] &&
+             data.stats is map &&
+             data.stats.keys().hasAll(['offense', 'defense', 'overall', 'ppg', 'oppg', 'fgPct', 'threePtPct', 'topg', 'wins', 'losses']) &&
+             data.stats.offense is number && data.stats.defense is number && data.stats.overall is number &&
+             data.stats.ppg is number && data.stats.oppg is number && data.stats.fgPct is number && data.stats.threePtPct is number &&
+             data.stats.topg is number && data.stats.wins is number && data.stats.losses is number;
+    }
+
+    function isValidGlobalSettings(data) {
+      return data.keys().hasAll(['formulaWeights']) &&
+             data.formulaWeights is map &&
+             data.formulaWeights.keys().hasAll(['starRatings', 'seasonAverages', 'record', 'homeCourt']) &&
+             data.formulaWeights.starRatings is number && data.formulaWeights.seasonAverages is number && 
+             data.formulaWeights.record is number && data.formulaWeights.homeCourt is number;
+    }
+
+    // -------------------------------------------------------------------------
+    // FORBIDDEN CATCH-ALL
+    // -------------------------------------------------------------------------
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // -------------------------------------------------------------------------
+    // 1. USERS COLLECTION
+    // -------------------------------------------------------------------------
+    match /users/{userId} {
+      allow read: if isSignedIn() && (isOwner(userId) || isAdmin());
+      allow create: if isSignedIn() && isValidId(userId) && isOwner(userId) &&
+                       isValidUser(incoming()) && incoming().role == 'bettor' && incoming().balance == 1000;
+                       
+      // In this prototype, bettors can update their own balance, but CANNOT escalate their role.
+      // Admins can update anything.
+      allow update: if isSignedIn() && isValidUser(incoming()) && (
+        isAdmin() ||
+        (
+          isOwner(userId) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['balance']) &&
+          incoming().role == existing().role
+        )
+      );
+      
+      allow delete: if isAdmin();
+    }
+
+    // -------------------------------------------------------------------------
+    // 2. TEAMS COLLECTION
+    // -------------------------------------------------------------------------
+    match /teams/{teamId} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin() && isValidId(teamId) && isValidTeam(incoming());
+      allow update: if isAdmin() && isValidTeam(incoming());
+      allow delete: if isAdmin();
+    }
+
+    // -------------------------------------------------------------------------
+    // 3. GLOBAL SETTINGS COLLECTION
+    // -------------------------------------------------------------------------
+    match /global/{settingId} {
+      // Must be logged in to read settings (powers math engine for bettors)
+      allow read: if isSignedIn();
+      allow create: if isAdmin() && isValidId(settingId) && settingId == 'settings' && isValidGlobalSettings(incoming());
+      allow update: if isAdmin() && isValidGlobalSettings(incoming());
+      allow delete: if isAdmin();
+    }
+  }
+}

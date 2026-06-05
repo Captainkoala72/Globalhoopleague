@@ -1,0 +1,155 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile, balance, and role.",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "description": "User email address"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["bettor", "admin"],
+          "description": "Role-based access group"
+        },
+        "balance": {
+          "type": "number",
+          "description": "Simulated money balance"
+        },
+        "lastAdWatchedAt": {
+          "type": "number"
+        }
+      },
+      "required": ["email", "role", "balance"]
+    },
+    "Team": {
+      "title": "Team",
+      "description": "A sports team with dynamically adjustable ratings.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "conference": {
+          "type": "string",
+          "enum": ["USA", "World"]
+        },
+        "stats": {
+          "type": "object",
+          "properties": {
+            "offense": { "type": "number" },
+            "defense": { "type": "number" },
+            "overall": { "type": "number" },
+            "ppg": { "type": "number" },
+            "oppg": { "type": "number" },
+            "fgPct": { "type": "number" },
+            "threePtPct": { "type": "number" },
+            "topg": { "type": "number" },
+            "wins": { "type": "number" },
+            "losses": { "type": "number" }
+          },
+          "required": ["offense", "defense", "overall", "ppg", "oppg", "fgPct", "threePtPct", "topg", "wins", "losses"]
+        }
+      },
+      "required": ["name", "conference", "stats"]
+    },
+    "GlobalSettings": {
+      "title": "Global Settings",
+      "description": "Shared algorithm formula weights across the whole platform.",
+      "type": "object",
+      "properties": {
+        "formulaWeights": {
+          "type": "object",
+          "properties": {
+            "starRatings": { "type": "number" },
+            "seasonAverages": { "type": "number" },
+            "record": { "type": "number" },
+            "homeCourt": { "type": "number" }
+          },
+          "required": ["starRatings", "seasonAverages", "record", "homeCourt"]
+        }
+      },
+      "required": ["formulaWeights"]
+    },
+    "Match": {
+      "title": "Match",
+      "description": "A scheduled or active match.",
+      "type": "object",
+      "properties": {
+        "awayTeamId": { "type": "string" },
+        "homeTeamId": { "type": "string" },
+        "status": {
+          "type": "string",
+          "enum": ["scheduled", "active", "settled"]
+        },
+        "date": { "type": "string" },
+        "homeScore": { "type": "number" },
+        "awayScore": { "type": "number" },
+        "awayWinProb": { "type": "number", "description": "Calculated win probability for away team" },
+        "homeWinProb": { "type": "number", "description": "Calculated win probability for home team" },
+        "spreadAway": { "type": "object" },
+        "spreadHome": { "type": "object" },
+        "moneylineAway": { "type": "object" },
+        "moneylineHome": { "type": "object" }
+      },
+      "required": ["awayTeamId", "homeTeamId", "status", "date"]
+    },
+    "Bet": {
+      "title": "Bet",
+      "description": "A placed wager on a match.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "matchupId": { "type": "string" },
+        "selection": { "type": "object" },
+        "matchupTitle": { "type": "string" },
+        "selectedTeamName": { "type": "string" },
+        "stake": { "type": "number" },
+        "potentialPayout": { "type": "number" },
+        "actualPayout": { "type": "number" },
+        "status": {
+          "type": "string",
+          "enum": ["open", "won", "lost", "push"]
+        },
+        "homeScore": { "type": "number" },
+        "awayScore": { "type": "number" },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["userId", "matchupId", "selection", "stake", "status", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/bets/{betId}": {
+      "schema": {
+        "$ref": "#/entities/Bet"
+      },
+      "description": "Store all bets placed by users."
+    },
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/User"
+      },
+      "description": "Store user accounts with balance and roles."
+    },
+    "/teams/{teamId}": {
+      "schema": {
+        "$ref": "#/entities/Team"
+      },
+      "description": "Store all 8 hoopland teams."
+    },
+    "/global/{settingId}": {
+      "schema": {
+        "$ref": "#/entities/GlobalSettings"
+      },
+      "description": "Single-document collection for formula weight settings. Expected document ID is 'settings'."
+    },
+    "/matches/{matchId}": {
+      "schema": {
+        "$ref": "#/entities/Match"
+      },
+      "description": "Matches between teams with optional odds if status is active."
+    }
+  }
+}
