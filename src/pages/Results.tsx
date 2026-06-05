@@ -113,9 +113,15 @@ export function Results() {
                   <span className="text-xs font-mono font-bold text-white/40">
                     {new Date(match.startTime).toLocaleDateString()}
                   </span>
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-[#c1ff00] bg-[#c1ff00]/10 px-2 py-0.5 rounded">
-                    Final
-                  </span>
+                  {match.status === "cancelled" ? (
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-red-500 bg-red-500/10 px-2 py-0.5 rounded">
+                      Cancelled
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-[#c1ff00] bg-[#c1ff00]/10 px-2 py-0.5 rounded">
+                      Final
+                    </span>
+                  )}
                 </div>
 
                 <div className="p-6 flex flex-col gap-6">

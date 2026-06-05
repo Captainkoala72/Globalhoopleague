@@ -10,6 +10,8 @@ import {
   query,
   where,
   addDoc,
+  increment,
+  getDocs,
 } from "firebase/firestore";
 import { db } from "../firebase";
 
@@ -123,6 +125,7 @@ export function BettingProvider({ children }) {
         homeTeam,
         awayTeam,
         startTime: rm.date,
+        week: rm.week,
         status: rm.status,
         homeScore: rm.homeScore,
         awayScore: rm.awayScore,
@@ -162,7 +165,7 @@ export function BettingProvider({ children }) {
         formattedMatchups.push(m);
       } else if (rm.status === "scheduled") {
         scheduled.push(m);
-      } else if (rm.status === "settled") {
+      } else if (rm.status === "settled" || rm.status === "cancelled") {
         settled.push(m);
       }
     });
@@ -215,6 +218,40 @@ export function BettingProvider({ children }) {
     if (profile?.role !== "admin") return;
     await updateTeams(INITIAL_TEAMS);
     await updateWeights(INITIAL_WEIGHTS);
+  };
+
+  const cancelMatch = async (matchId: string) => {
+    if (profile?.role !== "admin") return;
+    try {
+      const batch = writeBatch(db);
+      
+      // Step A: Cancel the match
+      const matchRef = doc(db, "matches", matchId);
+      batch.update(matchRef, { status: "cancelled" });
+
+      // Step B: Query bets for this match
+      const betsQuery = query(collection(db, "bets"), where("matchupId", "==", matchId));
+      const snapshot = await getDocs(betsQuery);
+
+      // Step C & D: Update bets and refund users
+      snapshot.forEach((betDoc) => {
+        const betData = betDoc.data();
+        if (betData.status !== "refunded") {
+          batch.update(betDoc.ref, { status: "refunded" });
+          
+          // Refund user balance
+          if (betData.userId && betData.stake) {
+            const userRef = doc(db, "users", betData.userId);
+            batch.update(userRef, { balance: increment(betData.stake) });
+          }
+        }
+      });
+
+      await batch.commit();
+    } catch (e) {
+      console.error("Error cancelling match:", e);
+      throw e;
+    }
   };
 
   const getTeamById = (id) => teams.find((t) => t.id === id);
@@ -304,6 +341,7 @@ export function BettingProvider({ children }) {
         updateTeams,
         updateWeights,
         resetToDefaults,
+        cancelMatch,
       }}
     >
       {children}

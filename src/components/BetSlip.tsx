@@ -60,7 +60,7 @@ export function BetSlip() {
   );
 }
 
-function BetSlipCard({ item }) {
+function BetSlipCard({ item }: any) {
   const { removeFromBetSlip, placeBet, dimesBalance } = useBetting();
   const [stakeStr, setStakeStr] = useState("");
   const stake = parseFloat(stakeStr) || 0;
@@ -82,7 +82,8 @@ function BetSlipCard({ item }) {
     }
   };
 
-  const isStakeValid = stake > 0 && stake <= dimesBalance;
+  const isStakeLimitReached = stake < 10 || stake > 1000;
+  const isStakeValid = stake >= 10 && stake <= 1000 && stake <= dimesBalance;
 
   return (
     <div className="glass-card p-4 border-l-4 border-l-[#c1ff00] flex flex-col gap-4">
@@ -133,17 +134,24 @@ function BetSlipCard({ item }) {
         </div>
       </div>
 
-      <button
-        onClick={handlePlaceBet}
-        disabled={!isStakeValid}
-        className={`w-full py-3 font-black uppercase italic rounded-xl text-sm transition-all focus:outline-none focus:ring-2 focus:ring-[#c1ff00] focus:ring-offset-2 focus:ring-offset-[#050608] ${
-          isStakeValid
-            ? "bg-[#c1ff00] hover:scale-[0.98] text-black shadow-[0_0_15px_rgba(193,255,0,0.3)]"
-            : "bg-white/5 text-white/30 cursor-not-allowed border border-white/10"
-        }`}
-      >
-        {stake > dimesBalance ? "Insufficient Dimes" : "Place Bet"}
-      </button>
+      <div className="flex flex-col gap-2">
+        <button
+          onClick={handlePlaceBet}
+          disabled={!isStakeValid}
+          className={`w-full py-3 font-black uppercase italic rounded-xl text-sm transition-all focus:outline-none focus:ring-2 focus:ring-[#c1ff00] focus:ring-offset-2 focus:ring-offset-[#050608] ${
+            isStakeValid
+              ? "bg-[#c1ff00] hover:scale-[0.98] text-black shadow-[0_0_15px_rgba(193,255,0,0.3)]"
+              : "bg-white/5 text-white/30 cursor-not-allowed border border-white/10"
+          }`}
+        >
+          {stake > dimesBalance ? "Insufficient Dimes" : "Place Bet"}
+        </button>
+        {stakeStr && isStakeLimitReached && (
+          <div className="text-red-500 text-[10px] font-bold text-center uppercase flex items-center justify-center gap-1">
+            <AlertCircle size={12} /> Wager must be between 10 and 1000 Dimes
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -3,7 +3,7 @@ import { useBetting } from "../context/BettingContext";
 import { ChevronDown, ChevronUp } from "lucide-react";
 
 export function MatchupCard({ matchup }: { matchup: any }) {
-  const { addToBetSlip, betSlip } = useBetting();
+  const { addToBetSlip, betSlip, placedBets } = useBetting();
   const [showAdvancedStats, setShowAdvancedStats] = useState(false);
 
   const isSelected = (oddsId: string) => {
@@ -23,6 +23,12 @@ export function MatchupCard({ matchup }: { matchup: any }) {
   const homeColorCSS =
     matchup.homeTeam.conference === "USA" ? "#dc2626" : "#4b5563";
 
+  // Time Locks & "Live" UI
+  const isLive = new Date() >= new Date(matchup.startTime);
+  
+  // One Bet Per Market
+  const hasPlacedBet = placedBets.some((bet: any) => bet.matchupId === matchup.id);
+
   const awayProbPct = (matchup.awayWinProb * 100).toFixed(1);
   const homeProbPct = (matchup.homeWinProb * 100).toFixed(1);
 
@@ -39,13 +45,22 @@ export function MatchupCard({ matchup }: { matchup: any }) {
   ];
 
   return (
-    <div className="glass-card p-4 sm:p-5 flex flex-col gap-4 mb-4">
+    <div className="glass-card p-4 sm:p-5 flex flex-col gap-4 mb-4 relative overflow-hidden">
       <div className="flex justify-between items-center text-[10px] font-bold text-white/30 uppercase tracking-widest">
-        <span>{matchup.awayTeam.conference} Conference</span>
-        <span className="text-[#c1ff00]">Live • {matchup.startTime}</span>
+        <span>Week {matchup.week || "?"}</span>
+        <span>
+          {isLive ? (
+            <span className="text-red-500 font-bold flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
+              Live • {matchup.startTime}
+            </span>
+          ) : (
+            `Scheduled • ${matchup.startTime}`
+          )}
+        </span>
       </div>
 
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-6 relative">
         {/* Away Team Row */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-0">
           <div className="flex items-center gap-3">
@@ -58,18 +73,30 @@ export function MatchupCard({ matchup }: { matchup: any }) {
               {matchup.awayTeam.name}
             </span>
           </div>
-          <div className="flex gap-2 self-start sm:self-auto">
-            <OddsButton
-              selection={matchup.spreadAway}
-              selected={isSelected(matchup.spreadAway.id)}
-              onClick={() => handleOddsClick(matchup.spreadAway)}
-            />
-
-            <OddsButton
-              selection={matchup.moneylineAway}
-              selected={isSelected(matchup.moneylineAway.id)}
-              onClick={() => handleOddsClick(matchup.moneylineAway)}
-            />
+          <div className="flex gap-2 self-start sm:self-auto min-w-[200px] justify-end">
+             {isLive ? (
+                <div className="flex items-center gap-2 px-3 py-2 border border-red-500/20 bg-red-500/10 rounded w-full justify-center text-red-500 font-bold uppercase text-[10px] tracking-wider">
+                  <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                  Match Is Live
+                </div>
+             ) : hasPlacedBet ? (
+                <div className="flex items-center gap-2 px-3 py-2 border border-[#c1ff00]/20 bg-[#c1ff00]/10 rounded w-full justify-center text-[#c1ff00] font-bold uppercase text-[10px] tracking-wider">
+                  <span>✓</span> Bet Placed
+                </div>
+             ) : (
+              <>
+                <OddsButton
+                  selection={matchup.spreadAway}
+                  selected={isSelected(matchup.spreadAway.id)}
+                  onClick={() => handleOddsClick(matchup.spreadAway)}
+                />
+                <OddsButton
+                  selection={matchup.moneylineAway}
+                  selected={isSelected(matchup.moneylineAway.id)}
+                  onClick={() => handleOddsClick(matchup.moneylineAway)}
+                />
+              </>
+             )}
           </div>
         </div>
 
@@ -103,18 +130,30 @@ export function MatchupCard({ matchup }: { matchup: any }) {
               {matchup.homeTeam.name}
             </span>
           </div>
-          <div className="flex gap-2 self-start sm:self-auto">
-            <OddsButton
-              selection={matchup.spreadHome}
-              selected={isSelected(matchup.spreadHome.id)}
-              onClick={() => handleOddsClick(matchup.spreadHome)}
-            />
-
-            <OddsButton
-              selection={matchup.moneylineHome}
-              selected={isSelected(matchup.moneylineHome.id)}
-              onClick={() => handleOddsClick(matchup.moneylineHome)}
-            />
+          <div className="flex gap-2 self-start sm:self-auto min-w-[200px] justify-end">
+             {isLive ? (
+                <div className="flex items-center gap-2 px-3 py-2 border border-red-500/20 bg-red-500/10 rounded w-full justify-center text-red-500 font-bold uppercase text-[10px] tracking-wider">
+                  <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                  Match Is Live
+                </div>
+             ) : hasPlacedBet ? (
+                <div className="flex items-center gap-2 px-3 py-2 border border-[#c1ff00]/20 bg-[#c1ff00]/10 rounded w-full justify-center text-[#c1ff00] font-bold uppercase text-[10px] tracking-wider">
+                  <span>✓</span> Bet Placed
+                </div>
+             ) : (
+              <>
+                <OddsButton
+                  selection={matchup.spreadHome}
+                  selected={isSelected(matchup.spreadHome.id)}
+                  onClick={() => handleOddsClick(matchup.spreadHome)}
+                />
+                <OddsButton
+                  selection={matchup.moneylineHome}
+                  selected={isSelected(matchup.moneylineHome.id)}
+                  onClick={() => handleOddsClick(matchup.moneylineHome)}
+                />
+              </>
+             )}
           </div>
         </div>
       </div>
