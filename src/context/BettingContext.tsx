@@ -231,26 +231,29 @@ export function BettingProvider({ children }) {
 
       // Step B: Query bets for this match
       const betsQuery = query(collection(db, "bets"), where("matchupId", "==", matchId));
-      const snapshot = await getDocs(betsQuery);
+      const betsSnapshot = await getDocs(betsQuery);
 
-      // Step C & D: Update bets and refund users
-      snapshot.forEach((betDoc) => {
-        const betData = betDoc.data();
-        if (betData.status !== "refunded") {
-          batch.update(betDoc.ref, { status: "refunded" });
-          
-          // Refund user balance
-          if (betData.userId && betData.stake) {
-            const userRef = doc(db, "users", betData.userId);
-            batch.update(userRef, { balance: increment(betData.stake) });
+      if (!betsSnapshot.empty) {
+        // Step C & D: Update bets and refund users
+        betsSnapshot.forEach((betDoc) => {
+          const betData = betDoc.data();
+          if (betData.status !== "refunded") {
+            const betRef = doc(db, "bets", betDoc.id);
+            batch.update(betRef, { status: "refunded" });
+            
+            // Refund user balance
+            if (betData.userId && betData.stake) {
+              const userRef = doc(db, "users", betData.userId);
+              batch.update(userRef, { balance: increment(betData.stake) });
+            }
           }
-        }
-      });
+        });
+      }
 
       await batch.commit();
-    } catch (e) {
-      console.error("Error cancelling match:", e);
-      throw e;
+    } catch (error) {
+      console.error("Firebase Batch Error:", error);
+      throw error;
     }
   };
 
