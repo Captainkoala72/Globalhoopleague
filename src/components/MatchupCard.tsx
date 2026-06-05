@@ -26,6 +26,20 @@ export function MatchupCard({ matchup }: { matchup: any }) {
   // Time Locks & "Live" UI
   const isLive = new Date() >= new Date(matchup.startTime);
   
+  const formatStartTime = (isoString: string) => {
+    try {
+      const d = new Date(isoString);
+      if (isNaN(d.getTime())) return isoString;
+      const monthDay = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(d);
+      const timeFmt = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).format(d);
+      return `${monthDay} • ${timeFmt}`;
+    } catch (e) {
+      return isoString;
+    }
+  };
+
+  const formattedStartTime = formatStartTime(matchup.startTime);
+  
   // One Bet Per Market
   const hasPlacedBet = placedBets.some((bet: any) => bet.matchupId === matchup.id);
 
@@ -52,10 +66,10 @@ export function MatchupCard({ matchup }: { matchup: any }) {
           {isLive ? (
             <span className="text-red-500 font-bold flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
-              Live • {matchup.startTime}
+              Live • {formattedStartTime.split(' • ')[1] || formattedStartTime}
             </span>
           ) : (
-            `Scheduled • ${matchup.startTime}`
+            formattedStartTime
           )}
         </span>
       </div>
@@ -74,16 +88,7 @@ export function MatchupCard({ matchup }: { matchup: any }) {
             </span>
           </div>
           <div className="flex gap-2 self-start sm:self-auto min-w-[200px] justify-end">
-             {isLive ? (
-                <div className="flex items-center gap-2 px-3 py-2 border border-red-500/20 bg-red-500/10 rounded w-full justify-center text-red-500 font-bold uppercase text-[10px] tracking-wider">
-                  <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-                  Match Is Live
-                </div>
-             ) : hasPlacedBet ? (
-                <div className="flex items-center gap-2 px-3 py-2 border border-[#c1ff00]/20 bg-[#c1ff00]/10 rounded w-full justify-center text-[#c1ff00] font-bold uppercase text-[10px] tracking-wider">
-                  <span>✓</span> Bet Placed
-                </div>
-             ) : (
+            {!isLive && !hasPlacedBet && (
               <>
                 <OddsButton
                   selection={matchup.spreadAway}
@@ -96,7 +101,7 @@ export function MatchupCard({ matchup }: { matchup: any }) {
                   onClick={() => handleOddsClick(matchup.moneylineAway)}
                 />
               </>
-             )}
+            )}
           </div>
         </div>
 
@@ -131,16 +136,7 @@ export function MatchupCard({ matchup }: { matchup: any }) {
             </span>
           </div>
           <div className="flex gap-2 self-start sm:self-auto min-w-[200px] justify-end">
-             {isLive ? (
-                <div className="flex items-center gap-2 px-3 py-2 border border-red-500/20 bg-red-500/10 rounded w-full justify-center text-red-500 font-bold uppercase text-[10px] tracking-wider">
-                  <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-                  Match Is Live
-                </div>
-             ) : hasPlacedBet ? (
-                <div className="flex items-center gap-2 px-3 py-2 border border-[#c1ff00]/20 bg-[#c1ff00]/10 rounded w-full justify-center text-[#c1ff00] font-bold uppercase text-[10px] tracking-wider">
-                  <span>✓</span> Bet Placed
-                </div>
-             ) : (
+            {!isLive && !hasPlacedBet && (
               <>
                 <OddsButton
                   selection={matchup.spreadHome}
@@ -153,9 +149,25 @@ export function MatchupCard({ matchup }: { matchup: any }) {
                   onClick={() => handleOddsClick(matchup.moneylineHome)}
                 />
               </>
-             )}
+            )}
           </div>
         </div>
+
+        {/* Status Banner */}
+        {(isLive || hasPlacedBet) && (
+          <div className="w-full">
+            {isLive ? (
+              <div className="flex items-center gap-2 py-3 border border-red-500/20 bg-red-500/10 rounded-lg w-full justify-center text-red-500 font-bold uppercase text-xs tracking-widest">
+                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                Match Is Live
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 py-3 border border-[#c1ff00]/20 bg-[#c1ff00]/10 rounded-lg w-full justify-center text-[#c1ff00] font-bold uppercase text-xs tracking-widest">
+                <span>✓</span> Bet Placed
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="pt-2 border-t border-white/5 mt-2">
