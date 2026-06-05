@@ -44,17 +44,17 @@ service cloud.firestore {
     }
 
     function isValidMatch(data) {
-      return data.keys().hasAll(['awayTeamId', 'homeTeamId', 'status', 'date']) &&
+      return data.keys().hasAll(['awayTeamId', 'homeTeamId', 'status']) &&
              data.awayTeamId is string && data.homeTeamId is string &&
-             data.status in ['scheduled', 'active', 'settled'] &&
-             data.date is string;
+             data.status in ['scheduled', 'active', 'settled', 'cancelled'] &&
+             (!data.keys().hasAny(['date']) || data.date is string);
     }
 
     function isValidBet(data) {
       return data.keys().hasAll(['userId', 'matchupId', 'selection', 'stake', 'status', 'timestamp']) &&
              data.userId is string && data.matchupId is string &&
              data.selection is map && data.stake is number &&
-             data.status in ['open', 'won', 'lost', 'push'] && data.timestamp is number;
+             data.status in ['open', 'won', 'lost', 'push', 'refunded'] && data.timestamp is number;
     }
 
     // -------------------------------------------------------------------------
@@ -71,8 +71,7 @@ service cloud.firestore {
       allow read: if isSignedIn() && (isOwner(userId) || isAdmin());
       allow create: if isSignedIn() && isValidId(userId) && isOwner(userId) &&
                        isValidUser(incoming()) && incoming().role == 'bettor' && incoming().balance == 1000;
-      allow update: if isSignedIn() && isValidUser(incoming()) && (
-        isAdmin() ||
+      allow update: if isSignedIn() && (isAdmin() || (isValidUser(incoming()) && 
         (
           isOwner(userId) &&
           incoming().role == existing().role &&
@@ -85,7 +84,7 @@ service cloud.firestore {
              (!existing().keys().hasAny(['lastAdWatchedAt']) || request.time.toMillis() >= existing().lastAdWatchedAt + 300000))
           )
         )
-      );
+      ));
       allow delete: if isAdmin();
     }
 
@@ -115,7 +114,7 @@ service cloud.firestore {
     match /matches/{matchId} {
       allow read: if isSignedIn();
       allow create: if isAdmin() && isValidId(matchId) && isValidMatch(incoming());
-      allow update: if isAdmin() && isValidMatch(incoming());
+      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
     // -------------------------------------------------------------------------
@@ -125,10 +124,9 @@ service cloud.firestore {
       allow read: if isSignedIn() && isOwner(resource.data.userId);
       allow read: if isAdmin();
       allow create: if isSignedIn() && isValidId(betId) && isOwner(incoming().userId) && isValidBet(incoming());
-      allow update: if isSignedIn() && isValidBet(incoming()) && (
-        isAdmin() || 
+      allow update: if isSignedIn() && (isAdmin() || (isValidBet(incoming()) && 
         (isOwner(existing().userId) && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'actualPayout', 'homeScore', 'awayScore']))
-      );
+      ));
       allow delete: if isAdmin();
     }
   }

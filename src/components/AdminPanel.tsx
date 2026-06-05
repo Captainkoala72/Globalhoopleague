@@ -498,6 +498,8 @@ function SettleMatchesView() {
   const [scores, setScores] = useState({});
   const [loadingId, setLoadingId] = useState(null);
 
+  const [cancellingId, setCancellingId] = useState(null);
+
   const handleScoreChange = (matchId, type, value) => {
     setScores((prev) => ({
       ...prev,
@@ -526,19 +528,26 @@ function SettleMatchesView() {
     }
   };
 
-  const handleCancel = async (matchId) => {
-    if (window.confirm("Are you sure you want to cancel this match? All active bets will be refunded.")) {
-      setLoadingId(matchId);
-      try {
-        await cancelMatch(matchId);
-        alert("Match cancelled and bets refunded.");
-      } catch (e) {
-        alert("Failed to cancel match.");
-      } finally {
-        setLoadingId(null);
-      }
+  const confirmCancel = async (matchId) => {
+    console.log("User confirmed cancellation for:", matchId);
+    setLoadingId(matchId);
+    try {
+      await cancelMatch(matchId);
+      alert("Match cancelled and bets refunded.");
+    } catch (e) {
+      console.error("Cancellation error:", e);
+      alert("Failed to cancel match.");
+    } finally {
+      setLoadingId(null);
+      setCancellingId(null);
     }
   };
+
+  const handleCancelClick = (matchId) => {
+    console.log("Cancel clicked for match:", matchId);
+    setCancellingId(matchId);
+  };
+
 
   const allManageableMatchups = [...activeMatchups, ...scheduledMatchups];
 
@@ -619,23 +628,46 @@ function SettleMatchesView() {
               </div>
             </div>
 
-            <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto">
+            <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto relative z-20 pointer-events-auto">
               {m.status === "active" && (
                 <button
+                  type="button"
                   onClick={() => handleSettle(m.id)}
                   disabled={loadingId === m.id}
-                  className="w-full md:w-auto px-6 py-4 bg-[#c1ff00] text-black font-black uppercase italic rounded-xl text-sm hover:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                  className="w-full md:w-auto px-6 py-4 bg-[#c1ff00] text-black font-black uppercase italic rounded-xl text-sm hover:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap cursor-pointer pointer-events-auto"
                 >
                   {loadingId === m.id ? "Processing..." : "Settle"}
                 </button>
               )}
-              <button
-                onClick={() => handleCancel(m.id)}
-                disabled={loadingId === m.id}
-                className="w-full md:w-auto px-6 py-4 bg-red-600 text-white font-black uppercase italic rounded-xl text-sm hover:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-              >
-                {loadingId === m.id ? "Processing..." : "Cancel Match"}
-              </button>
+              {cancellingId === m.id ? (
+                <div className="flex gap-2 w-full md:w-auto">
+                  <button
+                    type="button"
+                    onClick={() => setCancellingId(null)}
+                    disabled={loadingId === m.id}
+                    className="flex-1 w-full md:w-auto px-4 py-4 bg-white/10 text-white font-black uppercase italic rounded-xl text-sm hover:scale-[0.98] transition-all disabled:opacity-50"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => confirmCancel(m.id)}
+                    disabled={loadingId === m.id}
+                    className="flex-1 relative z-30 w-full md:w-auto px-4 py-4 bg-red-600 text-white font-black uppercase italic rounded-xl text-sm hover:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer pointer-events-auto"
+                  >
+                    {loadingId === m.id ? "Processing..." : "Confirm Cancel"}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleCancelClick(m.id)}
+                  disabled={loadingId === m.id}
+                  className="relative z-30 w-full md:w-auto px-6 py-4 bg-red-600/80 text-white hover:bg-red-600 font-black uppercase italic rounded-xl text-sm hover:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap cursor-pointer pointer-events-auto"
+                >
+                  {loadingId === m.id ? "Processing..." : "Cancel Match"}
+                </button>
+              )}
             </div>
           </div>
         ))}
