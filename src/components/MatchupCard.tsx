@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useBetting } from "../context/BettingContext";
 import { ChevronDown, ChevronUp } from "lucide-react";
+import { TeamLogo } from "./TeamLogo";
 
 export function MatchupCard({ matchup }: { matchup: any }) {
   const { addToBetSlip, betSlip, placedBets } = useBetting();
@@ -78,11 +79,7 @@ export function MatchupCard({ matchup }: { matchup: any }) {
         {/* Away Team Row */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-0">
           <div className="flex items-center gap-3">
-            <div
-              className={`w-8 h-8 rounded ${awayColor} flex items-center justify-center font-bold text-white shrink-0`}
-            >
-              {matchup.awayTeam.name.substring(0, 2).toUpperCase()}
-            </div>
+            <TeamLogo teamName={matchup.awayTeam.name} className="w-8 h-8 sm:w-10 sm:h-10" />
             <span className="text-base sm:text-lg font-bold uppercase italic text-white truncate max-w-[150px] sm:max-w-[200px]">
               {matchup.awayTeam.name}
             </span>
@@ -126,11 +123,7 @@ export function MatchupCard({ matchup }: { matchup: any }) {
         {/* Home Team Row */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-0">
           <div className="flex items-center gap-3">
-            <div
-              className={`w-8 h-8 rounded ${homeColor} flex items-center justify-center font-bold text-white shrink-0`}
-            >
-              {matchup.homeTeam.name.substring(0, 2).toUpperCase()}
-            </div>
+            <TeamLogo teamName={matchup.homeTeam.name} className="w-8 h-8 sm:w-10 sm:h-10" />
             <span className="text-base sm:text-lg font-bold uppercase italic text-white truncate max-w-[150px] sm:max-w-[200px]">
               {matchup.homeTeam.name}
             </span>

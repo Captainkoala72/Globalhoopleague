@@ -1,4 +1,5 @@
 import { useBetting } from "../context/BettingContext";
+import { TeamLogo } from "../components/TeamLogo";
 
 export function Schedule() {
   const { scheduledMatchups, activeMatchups } = useBetting();
@@ -53,17 +54,23 @@ export function Schedule() {
                         <span className="text-white/60 text-xs font-bold uppercase tracking-widest">
                           Away
                         </span>
-                        <span className="text-lg font-black italic uppercase text-white">
-                          {match.awayTeam.name}
-                        </span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-lg font-black italic uppercase text-white text-right">
+                            {match.awayTeam.name}
+                          </span>
+                          <TeamLogo teamName={match.awayTeam.name} className="w-8 h-8 shrink-0" />
+                        </div>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-white/60 text-xs font-bold uppercase tracking-widest">
                           Home
                         </span>
-                        <span className="text-lg font-black italic uppercase text-white">
-                          {match.homeTeam.name}
-                        </span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-lg font-black italic uppercase text-white text-right">
+                            {match.homeTeam.name}
+                          </span>
+                          <TeamLogo teamName={match.homeTeam.name} className="w-8 h-8 shrink-0" />
+                        </div>
                       </div>
                     </div>
                   </div>
