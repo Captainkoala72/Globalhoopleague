@@ -68,23 +68,10 @@ service cloud.firestore {
     // 1. USERS COLLECTION
     // -------------------------------------------------------------------------
     match /users/{userId} {
-      allow read: if isSignedIn() && (isOwner(userId) || isAdmin());
+      allow read: true;
       allow create: if isSignedIn() && isValidId(userId) && isOwner(userId) &&
                        isValidUser(incoming()) && incoming().role == 'bettor' && incoming().balance == 1000;
-      allow update: if isSignedIn() && (isAdmin() || (isValidUser(incoming()) && 
-        (
-          isOwner(userId) &&
-          incoming().role == existing().role &&
-          (
-            (incoming().diff(existing()).affectedKeys().hasOnly(['balance']) && incoming().balance <= existing().balance) ||
-            (incoming().diff(existing()).affectedKeys().hasOnly(['balance', 'lastAdWatchedAt']) &&
-             incoming().balance == existing().balance + 100 &&
-             incoming().lastAdWatchedAt >= request.time.toMillis() - 60000 &&
-             incoming().lastAdWatchedAt <= request.time.toMillis() + 60000 &&
-             (!existing().keys().hasAny(['lastAdWatchedAt']) || request.time.toMillis() >= existing().lastAdWatchedAt + 300000))
-          )
-        )
-      ));
+      allow update: if isSignedIn() && (isAdmin() || (isOwner(userId)));
       allow delete: if isAdmin();
     }
 
@@ -92,7 +79,7 @@ service cloud.firestore {
     // 2. TEAMS COLLECTION
     // -------------------------------------------------------------------------
     match /teams/{teamId} {
-      allow read: if isSignedIn();
+      allow read: true;
       allow create: if isAdmin() && isValidId(teamId) && isValidTeam(incoming());
       allow update: if isAdmin() && isValidTeam(incoming());
       allow delete: if isAdmin();
@@ -102,7 +89,7 @@ service cloud.firestore {
     // 3. GLOBAL SETTINGS COLLECTION
     // -------------------------------------------------------------------------
     match /global/{settingId} {
-      allow read: if isSignedIn();
+      allow read: true;
       allow create: if isAdmin() && isValidId(settingId) && settingId == 'settings' && isValidGlobalSettings(incoming());
       allow update: if isAdmin() && isValidGlobalSettings(incoming());
       allow delete: if isAdmin();
@@ -112,7 +99,7 @@ service cloud.firestore {
     // 4. MATCHES COLLECTION
     // -------------------------------------------------------------------------
     match /matches/{matchId} {
-      allow read: if isSignedIn();
+      allow read: true;
       allow create: if isAdmin() && isValidId(matchId) && isValidMatch(incoming());
       allow update: if isAdmin();
       allow delete: if isAdmin();
@@ -127,6 +114,15 @@ service cloud.firestore {
       allow update: if isSignedIn() && (isAdmin() || (isValidBet(incoming()) && 
         (isOwner(existing().userId) && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'actualPayout', 'homeScore', 'awayScore']))
       ));
+      allow delete: if isAdmin();
+    }
+    // -------------------------------------------------------------------------
+    // 6. CHAT MESSAGES COLLECTION
+    // -------------------------------------------------------------------------
+    match /chat_messages/{messageId} {
+      allow read: true;
+      allow create: if isSignedIn() && isOwner(incoming().userId);
+      allow update: if false;
       allow delete: if isAdmin();
     }
   }

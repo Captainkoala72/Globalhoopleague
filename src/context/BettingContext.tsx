@@ -30,10 +30,8 @@ export function BettingProvider({ children }) {
   const [scheduledMatchups, setScheduledMatchups] = useState([]);
   const [settledMatchups, setSettledMatchups] = useState([]);
 
-  // Real-time Firestore Listeners
+  // Public Real-time Firestore Listeners
   useEffect(() => {
-    if (!user) return; // Only listen if authenticated
-
     const unsubTeams = onSnapshot(
       collection(db, "teams"),
       (snapshot) => {
@@ -80,6 +78,20 @@ export function BettingProvider({ children }) {
       },
     );
 
+    return () => {
+      unsubTeams();
+      unsubSettings();
+      unsubMatches();
+    };
+  }, []);
+
+  // Private Real-time Firestore Listeners
+  useEffect(() => {
+    if (!user) {
+      setPlacedBets([]);
+      return;
+    }
+
     const q = query(collection(db, "bets"), where("userId", "==", user.uid));
     const unsubBets = onSnapshot(
       q,
@@ -100,9 +112,6 @@ export function BettingProvider({ children }) {
     );
 
     return () => {
-      unsubTeams();
-      unsubSettings();
-      unsubMatches();
       unsubBets();
     };
   }, [user]);

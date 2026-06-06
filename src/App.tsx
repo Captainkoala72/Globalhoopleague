@@ -18,8 +18,10 @@ import {
 import { Schedule } from "./pages/Schedule";
 import { Standings } from "./pages/Standings";
 import { Results } from "./pages/Results";
+import { Leaderboard } from "./pages/Leaderboard";
+import { Settings } from "./pages/Settings";
 
-function ProtectedRoute({ children, reqRole }) {
+function ProtectedRoute({ children, reqRole }: any) {
   const { profile, loading } = useAuth();
   if (loading) return null; // Let the top level loading handle it
 
@@ -31,6 +33,7 @@ function ProtectedRoute({ children, reqRole }) {
 }
 
 import { FreeDimes } from "./pages/FreeDimes";
+import { LiveChat } from "./components/LiveChat";
 
 function SportsbookView() {
   const { activeMatchups } = useBetting();
@@ -91,6 +94,7 @@ function SportsbookView() {
           <BetSlip />
         </div>
       </div>
+      <LiveChat />
     </div>
   );
 }
@@ -103,6 +107,7 @@ function DashboardLayout({ children }) {
   else if (location.pathname === "/schedule") activeTab = "schedule";
   else if (location.pathname === "/standings") activeTab = "standings";
   else if (location.pathname === "/results") activeTab = "results";
+  else if (location.pathname === "/leaderboard") activeTab = "leaderboard";
 
   return (
     <div className="min-h-screen flex flex-col bg-[#050608]">
@@ -140,6 +145,15 @@ function MainApp() {
             <Route path="/results" element={<Results />} />
             <Route path="/free-dimes" element={<FreeDimes />} />
             <Route path="/my-bets" element={<MyBets />} />
+            <Route path="/leaderboard" element={<Leaderboard />} />
+            <Route 
+              path="/settings" 
+              element={
+                <ProtectedRoute>
+                  <Settings />
+                </ProtectedRoute>
+              } 
+            />
             <Route
               path="/admin/*"
               element={

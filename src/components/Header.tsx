@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { LogOut, PlayCircle, Gift, Menu, X, CalendarDays, Trophy, ListOrdered, Receipt, ShieldAlert } from "lucide-react";
+import { LogOut, PlayCircle, Gift, Menu, X, CalendarDays, Trophy, ListOrdered, Receipt, ShieldAlert, Award, Settings } from "lucide-react";
 import { useBetting } from "../context/BettingContext";
 import { useAuth } from "../context/AuthContext";
 import { Link } from "react-router-dom";
@@ -39,6 +39,15 @@ export function Header({ activeTab }) {
       {/* Right: Balance & Hamburger */}
       <div className="flex items-center gap-3 sm:gap-4 shrink-0">
         
+        {/* Leaderboard Button */}
+        <Link 
+          to="/leaderboard"
+          className="w-10 h-10 rounded-lg flex items-center justify-center bg-white/5 border border-white/10 hover:bg-white/10 transition-colors text-white"
+          title="Leaderboard"
+        >
+          <Award size={20} className={activeTab === "leaderboard" ? "text-yellow-400" : "text-white/80"} />
+        </Link>
+
         {/* Balance Display */}
         <div className="flex items-center bg-white/5 border border-white/10 px-3 py-1.5 rounded-lg cursor-default">
           <div className="flex flex-col items-end">
@@ -118,6 +127,16 @@ export function Header({ activeTab }) {
               <Receipt size={18} className={activeTab === "mybets" ? "text-[#c1ff00]" : "text-white/50"} />
               My Bets
             </Link>
+            <Link
+              to="/leaderboard"
+              onClick={() => setMenuOpen(false)}
+              className={`flex items-center gap-3 px-6 py-4 text-sm font-bold uppercase tracking-wider transition-colors hover:bg-white/5 ${
+                activeTab === "leaderboard" ? "text-[#c1ff00]" : "text-white/80 hover:text-white"
+              }`}
+            >
+              <Award size={18} className={activeTab === "leaderboard" ? "text-[#c1ff00]" : "text-white/50"} />
+              Leaderboard
+            </Link>
             
             <div className="h-px bg-white/10 my-2 mx-4" />
 
@@ -144,6 +163,17 @@ export function Header({ activeTab }) {
             )}
 
             <div className="h-px bg-white/10 my-2 mx-4" />
+
+            <Link
+              to="/settings"
+              onClick={() => setMenuOpen(false)}
+              className={`flex items-center gap-3 px-6 py-4 text-sm font-bold uppercase tracking-wider transition-colors hover:bg-white/5 ${
+                activeTab === "settings" ? "text-white" : "text-white/80 hover:text-white"
+              }`}
+            >
+              <Settings size={18} className={activeTab === "settings" ? "text-white" : "text-white/50"} />
+              Settings
+            </Link>
 
             <button
               onClick={() => {
