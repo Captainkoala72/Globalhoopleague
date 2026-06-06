@@ -215,6 +215,21 @@ function OddsCalculatorView() {
   const [localWeights, setLocalWeights] = useState(weights);
   const [openPlayoffStats, setOpenPlayoffStats] = useState({});
 
+  // AI Influence State
+  const [aiWeight, setAiWeight] = useState(0);
+  const [aiProb, setAiProb] = useState<number | null>(null);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [allCoaches, setAllCoaches] = useState<any[]>([]);
+
+  useEffect(() => {
+    // Fetch coaches for AI prompt context
+    import("firebase/firestore").then(({ collection, getDocs }) => {
+      getDocs(collection(db, "coaches")).then(snap => {
+        setAllCoaches(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      }).catch(console.error);
+    });
+  }, []);
+
   useEffect(() => {
     setLocalTeams(teams);
   }, [teams]);
@@ -222,6 +237,12 @@ function OddsCalculatorView() {
   useEffect(() => {
     setLocalWeights(weights);
   }, [weights]);
+
+  // Reset AI state when matchup changes
+  useEffect(() => {
+    setAiProb(null);
+    setAiWeight(0);
+  }, [selectedMatchupId]);
 
   const handleWeightChange = (key, value) => {
     setLocalWeights((prev) => ({ ...prev, [key]: value }));
@@ -270,8 +291,56 @@ function OddsCalculatorView() {
 
   const currentOdds =
     currentHomeTeam && currentAwayTeam
-      ? calculateMarketOdds(currentHomeTeam, currentAwayTeam, localWeights)
+      ? calculateMarketOdds(currentHomeTeam, currentAwayTeam, localWeights, { aiProb, aiWeight })
       : null;
+
+  const handleGenerateAI = async () => {
+    if (!currentHomeTeam || !currentAwayTeam) return;
+    setIsAiLoading(true);
+    try {
+      const homeCoach = allCoaches.find(c => c.teamName === currentHomeTeam.name);
+      const awayCoach = allCoaches.find(c => c.teamName === currentAwayTeam.name);
+
+      const prompt = `Act as a sharp Vegas oddsmaker. Analyze this matchup and output JSON with the "homeWinProb".
+      
+Analytical Guardrails:
+1. Strict Recency Window: Strictly analyze team history and trend data from only the last 5 to 10 matches. Any statistical data or performance history older than 10 matches is completely irrelevant to current trends and must be ignored.
+2. Situational & Behavioral Weighting: Evaluate and adjust the probability based on specific team personalities and situational factors, including:
+  - Clutch Factor: Whether a team excels or chokes in high-pressure, late-game situations.
+  - Game Margins: Whether a team historically blows out opponents or tends to play exceptionally close, tight games.
+  - Home/Away Splits: Identifying teams that have a heavy home-court advantage versus notable struggles when playing away.
+3. Coaching Matchup: Analyze the coaching attributes. Determine playstyle clashes (e.g., does a Fast Paced offense expose a Conservative defense?). Weigh the Leadership and Motivation stats heavily for underdog scenarios or clutch moments. Adjust the final win probability based on which coach has the tactical advantage.
+
+Home Team: ${currentHomeTeam.name}
+Stats: ${JSON.stringify(currentHomeTeam.stats)}
+Playoff Stats: ${JSON.stringify(currentHomeTeam.playoffStats)}
+Coach: ${JSON.stringify(homeCoach || "No coach info")}
+
+Away Team: ${currentAwayTeam.name}
+Stats: ${JSON.stringify(currentAwayTeam.stats)}
+Playoff Stats: ${JSON.stringify(currentAwayTeam.playoffStats)}
+Coach: ${JSON.stringify(awayCoach || "No coach info")}
+`;
+
+      const response = await fetch("/api/generate-odds", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt }),
+      });
+      const data = await response.json();
+      if (data.homeWinProb) {
+        setAiProb(data.homeWinProb);
+        // Default to a 50% blend if slider is at 0 so they can see the effect immediately
+        if (aiWeight === 0) setAiWeight(50);
+      } else if (data.error) {
+        alert("Failed to generate: " + data.error);
+      }
+    } catch (e) {
+      console.error(e);
+      alert("AI Generation failed.");
+    }
+    setIsAiLoading(false);
+  };
 
   const handlePublish = async () => {
     if (!selectedMatchup || !currentOdds) return;
@@ -290,6 +359,11 @@ function OddsCalculatorView() {
         spreadHome: currentOdds.spreadHome,
         moneylineAway: currentOdds.moneylineAway,
         moneylineHome: currentOdds.moneylineHome,
+        oddsCalculatorData: {
+          baseWinProb: currentOdds.baseWinProb || currentOdds.homeWinProb, // Assuming oddsEngine returns this now
+          aiWinProb: aiProb,
+          aiWeight: aiWeight,
+        }
       });
       alert("Match published to active markets!");
       setSelectedMatchupId("");
@@ -537,6 +611,32 @@ function OddsCalculatorView() {
                       label="Home Court Adv."
                       value={localWeights.homeCourt}
                       onChange={(v) => handleWeightChange("homeCourt", v)}
+                    />
+                  </div>
+
+                  <h3 className="text-xl font-black italic uppercase text-[#c1ff00] mt-8 mb-6 flex items-center gap-2">
+                    <span>✨</span> AI Oddsmaker
+                  </h3>
+                  <div className="glass-card p-6 flex flex-col gap-6 border border-[#c1ff00]/20 bg-[#c1ff00]/5">
+                    <button
+                      onClick={handleGenerateAI}
+                      disabled={isAiLoading}
+                      className="w-full py-4 bg-indigo-500/20 border border-indigo-500/50 text-indigo-400 font-black uppercase italic rounded-xl text-sm hover:bg-indigo-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
+                    >
+                      {isAiLoading ? "Thinking (Gemini)..." : "Generate AI Projection"}
+                    </button>
+                    
+                    {aiProb !== null && (
+                      <div className="text-center bg-black/40 p-4 rounded-xl space-y-1">
+                        <div className="text-xs text-indigo-300 font-bold uppercase tracking-widest">Raw AI Home Win Prob</div>
+                        <div className="text-xl text-white font-mono font-black">{(aiProb * 100).toFixed(1)}%</div>
+                      </div>
+                    )}
+
+                    <WeightSlider
+                      label="AI Influence Weight"
+                      value={aiWeight}
+                      onChange={(v) => setAiWeight(v)}
                     />
                   </div>
                 </div>

@@ -31,6 +31,42 @@ async function startServer() {
     }
   });
 
+  app.post("/api/generate-odds", async (req, res) => {
+    try {
+      const { prompt } = req.body;
+      const ai = new GoogleGenAI({
+        apiKey: process.env.GEMINI_API_KEY,
+        httpOptions: {
+          headers: { 'User-Agent': 'aistudio-build' }
+        }
+      });
+      
+      const response = await ai.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: prompt,
+        config: {
+          systemInstruction: "You are a sharp Vegas oddsmaker. Analyze the matchup stats, consider betting trends, and output ONLY a JSON object containing a raw predicted win probability for the Home Team. No extra reasoning.",
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "OBJECT",
+            properties: {
+              homeWinProb: {
+                type: "NUMBER",
+                description: "Predicted win probability for the Home Team as a decimal between 0.01 and 0.99"
+              }
+            },
+            required: ["homeWinProb"]
+          }
+        }
+      });
+
+      res.json(JSON.parse(response.text));
+    } catch (error: any) {
+      console.error("AI Odds Generation Error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

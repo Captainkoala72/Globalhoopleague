@@ -21,6 +21,7 @@ import { Results } from "./pages/Results";
 import { Leaderboard } from "./pages/Leaderboard";
 import { Settings } from "./pages/Settings";
 import { HoopBuzz } from "./pages/HoopBuzz";
+import { Coaches } from "./pages/Coaches";
 
 function ProtectedRoute({ children, reqRole }: any) {
   const { profile, loading } = useAuth();
@@ -107,6 +108,7 @@ function DashboardLayout({ children }) {
   else if (location.pathname.startsWith("/admin")) activeTab = "admin";
   else if (location.pathname === "/schedule") activeTab = "schedule";
   else if (location.pathname === "/standings") activeTab = "standings";
+  else if (location.pathname === "/coaches") activeTab = "coaches";
   else if (location.pathname === "/results") activeTab = "results";
   else if (location.pathname === "/hoopbuzz") activeTab = "hoopbuzz";
   else if (location.pathname === "/leaderboard") activeTab = "leaderboard";
@@ -144,6 +146,7 @@ function MainApp() {
             <Route path="/" element={<SportsbookView />} />
             <Route path="/schedule" element={<Schedule />} />
             <Route path="/standings" element={<Standings />} />
+            <Route path="/coaches" element={<Coaches />} />
             <Route path="/results" element={<Results />} />
             <Route path="/hoopbuzz" element={<HoopBuzz />} />
             <Route path="/free-dimes" element={<FreeDimes />} />

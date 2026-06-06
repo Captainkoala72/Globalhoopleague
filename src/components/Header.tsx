@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { LogOut, PlayCircle, Gift, Menu, X, CalendarDays, Trophy, ListOrdered, Receipt, ShieldAlert, Award, Settings, Newspaper } from "lucide-react";
+import { LogOut, PlayCircle, Gift, Menu, X, CalendarDays, Trophy, ListOrdered, Receipt, ShieldAlert, Award, Settings, Newspaper, Users } from "lucide-react";
 import { useBetting } from "../context/BettingContext";
 import { useAuth } from "../context/AuthContext";
 import { Link } from "react-router-dom";
@@ -109,6 +109,16 @@ export function Header({ activeTab }) {
             >
               <ListOrdered size={18} className={activeTab === "standings" ? "text-[#c1ff00]" : "text-white/50"} />
               Standings
+            </Link>
+            <Link
+              to="/coaches"
+              onClick={() => setMenuOpen(false)}
+              className={`flex items-center gap-3 px-6 py-4 text-sm font-bold uppercase tracking-wider transition-colors hover:bg-white/5 ${
+                activeTab === "coaches" ? "text-[#c1ff00]" : "text-white/80 hover:text-white"
+              }`}
+            >
+              <Users size={18} className={activeTab === "coaches" ? "text-[#c1ff00]" : "text-white/50"} />
+              Coaches
             </Link>
             <Link
               to="/results"

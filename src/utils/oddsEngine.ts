@@ -22,8 +22,8 @@ export const getCombinedStats = (team) => {
   return s;
 };
 
-export function calculateMarketOdds(homeTeam, awayTeam, weights) {
-  const calcPower = (t) => {
+export function calculateMarketOdds(homeTeam: any, awayTeam: any, weights: any, aiData?: any) {
+  const calcPower = (t: any) => {
     const combined = getCombinedStats(t);
     
     // Star Rating Score: Math around 0-100 logic. 5.0 avg -> 100
@@ -67,16 +67,33 @@ export function calculateMarketOdds(homeTeam, awayTeam, weights) {
     rawSpread += rawSpread < 0 ? -0.5 : 0.5;
   }
 
-  const homeSpreadNum = rawSpread;
-  const awaySpreadNum = -rawSpread;
-
-  const homeSpdLabel = `${homeSpreadNum > 0 ? "+" : ""}${homeSpreadNum}`;
-  const awaySpdLabel = `${awaySpreadNum > 0 ? "+" : ""}${awaySpreadNum}`;
+  let homeSpreadNum = rawSpread;
+  let awaySpreadNum = -rawSpread;
 
   // Win probability mapping: let's roughly say 1 pt of spread = ~3.2% probability away from 50%
   let homeWinProb = 0.5 + -homeSpreadNum * 0.032;
   homeWinProb = Math.max(0.01, Math.min(0.99, homeWinProb)); // Clamp between 0.01 and 0.99
+  
+  const baseWinProb = homeWinProb;
+  
+  if (aiData && typeof aiData.aiProb === 'number' && typeof aiData.aiWeight === 'number') {
+    homeWinProb = (homeWinProb * (1 - (aiData.aiWeight / 100))) + (aiData.aiProb * (aiData.aiWeight / 100));
+    
+    // adjust spread back based on new blended probability
+    let newRawSpread = (0.5 - homeWinProb) / 0.032;
+    newRawSpread = Math.round(newRawSpread * 2) / 2;
+    if (newRawSpread === 0) newRawSpread = -1;
+    else if (Number.isInteger(newRawSpread)) {
+      newRawSpread += newRawSpread < 0 ? -0.5 : 0.5;
+    }
+    homeSpreadNum = newRawSpread;
+    awaySpreadNum = -newRawSpread;
+  }
+
   const awayWinProb = 1 - homeWinProb;
+  
+  const homeSpdLabel = `${homeSpreadNum > 0 ? "+" : ""}${homeSpreadNum}`;
+  const awaySpdLabel = `${awaySpreadNum > 0 ? "+" : ""}${awaySpreadNum}`;
 
   const toAmerican = (prob) => {
     // Adding vigorous juice of about +2.5% per side
@@ -135,5 +152,6 @@ export function calculateMarketOdds(homeTeam, awayTeam, weights) {
     spreadAway,
     homeWinProb,
     awayWinProb,
+    baseWinProb,
   };
 }
