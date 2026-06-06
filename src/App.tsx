@@ -43,7 +43,7 @@ function SportsbookView() {
               Active Markets
             </h1>
             <p className="text-white/40 text-sm font-medium">
-              Regular Season Week 12 • Custom 8-Team Simulation
+              8 Teams • 14 Week Season • 4 Playoff Teams • Bo5 Playoff Rounds
             </p>
           </div>
           <div className="hidden sm:flex gap-2">
@@ -58,6 +58,18 @@ function SportsbookView() {
               className="px-4 py-2 glass-card text-xs font-bold uppercase hover:bg-white/5 transition-colors"
             >
               Standings
+            </Link>
+            <Link
+              to="/results"
+              className="px-4 py-2 glass-card text-xs font-bold uppercase hover:bg-white/5 transition-colors"
+            >
+              Results
+            </Link>
+            <Link
+              to="/my-bets"
+              className="px-4 py-2 glass-card text-xs font-bold uppercase hover:bg-white/5 transition-colors"
+            >
+              My Bets
             </Link>
           </div>
         </div>
