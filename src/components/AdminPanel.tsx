@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { useBetting } from "../context/BettingContext";
 import { calculateMarketOdds } from "../utils/oddsEngine";
 import {
@@ -212,6 +213,7 @@ function OddsCalculatorView() {
   // Local state for live preview
   const [localTeams, setLocalTeams] = useState(teams);
   const [localWeights, setLocalWeights] = useState(weights);
+  const [openPlayoffStats, setOpenPlayoffStats] = useState({});
 
   useEffect(() => {
     setLocalTeams(teams);
@@ -233,6 +235,23 @@ function OddsCalculatorView() {
             ...t,
             stats: {
               ...t.stats,
+              [statKey]: value,
+            },
+          };
+        }
+        return t;
+      }),
+    );
+  };
+
+  const handleTeamPlayoffStatChange = (teamId, statKey, value) => {
+    setLocalTeams((prev) =>
+      prev.map((t) => {
+        if (t.id === teamId) {
+          return {
+            ...t,
+            playoffStats: {
+              ...(t.playoffStats || {}),
               [statKey]: value,
             },
           };
@@ -371,85 +390,121 @@ function OddsCalculatorView() {
                           {team.name}
                         </span>
                       </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-                        <StatInput
-                          label="Offense"
-                          value={team.stats.offense}
-                          step={0.1}
-                          min={0}
-                          max={5}
-                          onChange={(v) =>
-                            handleTeamStatChange(team.id, "offense", v)
-                          }
-                        />
-                        <StatInput
-                          label="Defense"
-                          value={team.stats.defense}
-                          step={0.1}
-                          min={0}
-                          max={5}
-                          onChange={(v) =>
-                            handleTeamStatChange(team.id, "defense", v)
-                          }
-                        />
-                        <StatInput
-                          label="Overall"
-                          value={team.stats.overall}
-                          step={0.1}
-                          min={0}
-                          max={5}
-                          onChange={(v) =>
-                            handleTeamStatChange(team.id, "overall", v)
-                          }
-                        />
-                        <StatInput
-                          label="PPG"
-                          value={team.stats.ppg}
-                          step={0.1}
-                          onChange={(v) =>
-                            handleTeamStatChange(team.id, "ppg", v)
-                          }
-                        />
-                        <StatInput
-                          label="OPPG"
-                          value={team.stats.oppg}
-                          step={0.1}
-                          onChange={(v) =>
-                            handleTeamStatChange(team.id, "oppg", v)
-                          }
-                        />
-                        <StatInput
-                          label="FG %"
-                          value={team.stats.fgPct}
-                          step={0.1}
-                          onChange={(v) =>
-                            handleTeamStatChange(team.id, "fgPct", v)
-                          }
-                        />
-                        <StatInput
-                          label="3PT %"
-                          value={team.stats.threePtPct}
-                          step={0.1}
-                          onChange={(v) =>
-                            handleTeamStatChange(team.id, "threePtPct", v)
-                          }
-                        />
-                        <StatInput
-                          label="Wins"
-                          value={team.stats.wins}
-                          step={1}
-                          onChange={(v) =>
-                            handleTeamStatChange(team.id, "wins", v)
-                          }
-                        />
-                        <StatInput
-                          label="Losses"
-                          value={team.stats.losses}
-                          step={1}
-                          onChange={(v) =>
-                            handleTeamStatChange(team.id, "losses", v)
-                          }
-                        />
+                      <div className="flex flex-col gap-2">
+                        <h4 className="text-sm font-bold text-white/60 tracking-wider uppercase mb-1">Season Stats Input</h4>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                          <StatInput
+                            label="Offense"
+                            value={team.stats.offense}
+                            step={0.1}
+                            min={0}
+                            max={5}
+                            onChange={(v) => handleTeamStatChange(team.id, "offense", v)}
+                          />
+                          <StatInput
+                            label="Defense"
+                            value={team.stats.defense}
+                            step={0.1}
+                            min={0}
+                            max={5}
+                            onChange={(v) => handleTeamStatChange(team.id, "defense", v)}
+                          />
+                          <StatInput
+                            label="Overall"
+                            value={team.stats.overall}
+                            step={0.1}
+                            min={0}
+                            max={5}
+                            onChange={(v) => handleTeamStatChange(team.id, "overall", v)}
+                          />
+                          <StatInput
+                            label="PPG"
+                            value={team.stats.ppg}
+                            step={0.1}
+                            onChange={(v) => handleTeamStatChange(team.id, "ppg", v)}
+                          />
+                          <StatInput
+                            label="OPPG"
+                            value={team.stats.oppg}
+                            step={0.1}
+                            onChange={(v) => handleTeamStatChange(team.id, "oppg", v)}
+                          />
+                          <StatInput
+                            label="FG %"
+                            value={team.stats.fgPct}
+                            step={0.1}
+                            onChange={(v) => handleTeamStatChange(team.id, "fgPct", v)}
+                          />
+                          <StatInput
+                            label="3PT %"
+                            value={team.stats.threePtPct}
+                            step={0.1}
+                            onChange={(v) => handleTeamStatChange(team.id, "threePtPct", v)}
+                          />
+                          <StatInput
+                            label="Wins"
+                            value={team.stats.wins}
+                            step={1}
+                            onChange={(v) => handleTeamStatChange(team.id, "wins", v)}
+                          />
+                          <StatInput
+                            label="Losses"
+                            value={team.stats.losses}
+                            step={1}
+                            onChange={(v) => handleTeamStatChange(team.id, "losses", v)}
+                          />
+                        </div>
+                        
+                        <div className="mt-4 border-t border-white/10 pt-4">
+                          <button
+                            className="flex justify-between items-center w-full text-left"
+                            onClick={() => setOpenPlayoffStats(prev => ({ ...prev, [team.id]: !prev[team.id] }))}
+                          >
+                            <h4 className="text-sm font-bold text-white/60 tracking-wider uppercase">Playoff Stats Input</h4>
+                            {openPlayoffStats[team.id] ? <ChevronUp size={16} className="text-white/60"/> : <ChevronDown size={16} className="text-white/60"/>}
+                          </button>
+                          
+                          {openPlayoffStats[team.id] && (
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 mt-4">
+                              <StatInput
+                                label="Playoff PPG"
+                                value={team.playoffStats?.ppg ?? ""}
+                                step={0.1}
+                                onChange={(v) => handleTeamPlayoffStatChange(team.id, "ppg", v)}
+                              />
+                              <StatInput
+                                label="Playoff OPPG"
+                                value={team.playoffStats?.oppg ?? ""}
+                                step={0.1}
+                                onChange={(v) => handleTeamPlayoffStatChange(team.id, "oppg", v)}
+                              />
+                              <StatInput
+                                label="Playoff FG %"
+                                value={team.playoffStats?.fgPct ?? ""}
+                                step={0.1}
+                                onChange={(v) => handleTeamPlayoffStatChange(team.id, "fgPct", v)}
+                              />
+                              <StatInput
+                                label="Playoff 3PT %"
+                                value={team.playoffStats?.threePtPct ?? ""}
+                                step={0.1}
+                                onChange={(v) => handleTeamPlayoffStatChange(team.id, "threePtPct", v)}
+                              />
+                              <StatInput
+                                label="Playoff Wins"
+                                value={team.playoffStats?.wins ?? ""}
+                                step={1}
+                                onChange={(v) => handleTeamPlayoffStatChange(team.id, "wins", v)}
+                              />
+                              <StatInput
+                                label="Playoff Losses"
+                                value={team.playoffStats?.losses ?? ""}
+                                step={1}
+                                onChange={(v) => handleTeamPlayoffStatChange(team.id, "losses", v)}
+                              />
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}

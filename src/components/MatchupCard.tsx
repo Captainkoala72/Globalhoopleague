@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useBetting } from "../context/BettingContext";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { TeamLogo } from "./TeamLogo";
+import { getCombinedStats } from "../utils/oddsEngine";
 
 export function MatchupCard({ matchup }: { matchup: any }) {
   const { addToBetSlip, betSlip, placedBets } = useBetting();
@@ -60,8 +61,9 @@ export function MatchupCard({ matchup }: { matchup: any }) {
   ];
 
   return (
-    <div className="glass-card p-4 sm:p-5 flex flex-col gap-4 mb-4 relative overflow-hidden">
-      <div className="flex justify-between items-center text-[10px] font-bold text-white/30 uppercase tracking-widest">
+    <div className="glass-card p-4 sm:p-5 flex flex-col gap-4 mb-4 relative overflow-hidden bg-gradient-to-b from-white/5 to-transparent border border-white/10 rounded-2xl">
+      {/* Header Info */}
+      <div className="flex justify-between items-center text-[10px] font-bold text-white/40 uppercase tracking-widest border-b border-white/5 pb-3">
         <span>Week {matchup.week || "?"}</span>
         <span>
           {isLive ? (
@@ -75,40 +77,47 @@ export function MatchupCard({ matchup }: { matchup: any }) {
         </span>
       </div>
 
-      <div className="flex flex-col gap-6 relative">
-        {/* Away Team Row */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-0">
-          <div className="flex items-center gap-3">
-            <TeamLogo teamName={matchup.awayTeam.name} className="w-8 h-8 sm:w-10 sm:h-10" />
-            <span className="text-base sm:text-lg font-bold uppercase italic text-white truncate max-w-[150px] sm:max-w-[200px]">
+      <div className="flex flex-col gap-6 relative mt-1">
+        {/* Teams Layout: Split Columns */}
+        <div className="flex justify-between items-start">
+          {/* Away Team Column */}
+          <div className="flex flex-col items-center gap-2 flex-1 relative">
+            <div className="relative">
+               <TeamLogo teamName={matchup.awayTeam.name} className="w-16 h-16 sm:w-20 sm:h-20 drop-shadow-xl" />
+            </div>
+            <span className="text-sm sm:text-lg font-black uppercase italic text-center leading-tight text-white mt-1">
               {matchup.awayTeam.name}
             </span>
+            <span className="text-[10px] sm:text-xs font-bold text-white/40 uppercase tracking-widest">
+              {getCombinedStats(matchup.awayTeam).wins || 0}-{getCombinedStats(matchup.awayTeam).losses || 0}
+            </span>
           </div>
-          <div className="flex gap-2 self-start sm:self-auto min-w-[200px] justify-end">
-            {!isLive && !hasPlacedBet && (
-              <>
-                <OddsButton
-                  selection={matchup.spreadAway}
-                  selected={isSelected(matchup.spreadAway.id)}
-                  onClick={() => handleOddsClick(matchup.spreadAway)}
-                />
-                <OddsButton
-                  selection={matchup.moneylineAway}
-                  selected={isSelected(matchup.moneylineAway.id)}
-                  onClick={() => handleOddsClick(matchup.moneylineAway)}
-                />
-              </>
-            )}
+
+          <div className="flex flex-col items-center justify-center px-1 sm:px-4 self-stretch pt-6">
+            <span className="text-white/20 font-black italic text-lg sm:text-2xl uppercase">@</span>
+          </div>
+
+          {/* Home Team Column */}
+          <div className="flex flex-col items-center gap-2 flex-1 relative">
+            <div className="relative">
+               <TeamLogo teamName={matchup.homeTeam.name} className="w-16 h-16 sm:w-20 sm:h-20 drop-shadow-xl" />
+            </div>
+            <span className="text-sm sm:text-lg font-black uppercase italic text-center leading-tight text-white mt-1">
+              {matchup.homeTeam.name}
+            </span>
+            <span className="text-[10px] sm:text-xs font-bold text-white/40 uppercase tracking-widest">
+              {getCombinedStats(matchup.homeTeam).wins || 0}-{getCombinedStats(matchup.homeTeam).losses || 0}
+            </span>
           </div>
         </div>
 
         {/* Probability Visualizer Bar */}
-        <div className="flex flex-col gap-1 w-full mt-[-10px] mb-[-10px] z-10 px-0 sm:px-11">
+        <div className="flex flex-col gap-1 w-full z-10 px-0 sm:px-8 mt-2">
           <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-[#c1ff00]">
-            <span>{awayProbPct}% Win Prob</span>
-            <span>{homeProbPct}% Win Prob</span>
+            <span>{awayProbPct}% Win</span>
+            <span>{homeProbPct}% Win</span>
           </div>
-          <div className="h-1.5 w-full bg-white/10 rounded-full flex overflow-hidden">
+          <div className="h-1.5 w-full bg-white/5 rounded-full flex overflow-hidden">
             <div
               className={`${awayColor}`}
               style={{ width: `${matchup.awayWinProb * 100}%` }}
@@ -120,43 +129,70 @@ export function MatchupCard({ matchup }: { matchup: any }) {
           </div>
         </div>
 
-        {/* Home Team Row */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-0">
-          <div className="flex items-center gap-3">
-            <TeamLogo teamName={matchup.homeTeam.name} className="w-8 h-8 sm:w-10 sm:h-10" />
-            <span className="text-base sm:text-lg font-bold uppercase italic text-white truncate max-w-[150px] sm:max-w-[200px]">
-              {matchup.homeTeam.name}
-            </span>
+        {/* Vertical Betting Grid */}
+        {!isLive && !hasPlacedBet && (
+          <div className="flex flex-col gap-2 mt-2 px-0 sm:px-4">
+            {/* Spread Row */}
+            <div className="flex justify-between items-center gap-2 bg-black/40 rounded-xl p-2 sm:p-3 border border-white/5">
+              <div className="flex-1 flex justify-start">
+                 <OddsButton
+                   selection={matchup.spreadAway}
+                   selected={isSelected(matchup.spreadAway.id)}
+                   onClick={() => handleOddsClick(matchup.spreadAway)}
+                   className="w-full"
+                 />
+              </div>
+              <div className="flex flex-col items-center justify-center shrink-0 w-16 sm:w-24">
+                 <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-white/30 hidden sm:block">Spread</span>
+                 <span className="text-[9px] font-bold uppercase tracking-widest text-white/30 sm:hidden">SPR</span>
+              </div>
+              <div className="flex-1 flex justify-end">
+                 <OddsButton
+                   selection={matchup.spreadHome}
+                   selected={isSelected(matchup.spreadHome.id)}
+                   onClick={() => handleOddsClick(matchup.spreadHome)}
+                   className="w-full"
+                 />
+              </div>
+            </div>
+
+            {/* Moneyline Row */}
+            <div className="flex justify-between items-center gap-2 bg-black/40 rounded-xl p-2 sm:p-3 border border-white/5">
+              <div className="flex-1 flex justify-start">
+                 <OddsButton
+                   selection={matchup.moneylineAway}
+                   selected={isSelected(matchup.moneylineAway.id)}
+                   onClick={() => handleOddsClick(matchup.moneylineAway)}
+                   className="w-full"
+                 />
+              </div>
+              <div className="flex flex-col items-center justify-center shrink-0 w-16 sm:w-24">
+                 <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-white/30 hidden sm:block">Moneyline</span>
+                 <span className="text-[9px] font-bold uppercase tracking-widest text-white/30 sm:hidden">ML</span>
+              </div>
+              <div className="flex-1 flex justify-end">
+                 <OddsButton
+                   selection={matchup.moneylineHome}
+                   selected={isSelected(matchup.moneylineHome.id)}
+                   onClick={() => handleOddsClick(matchup.moneylineHome)}
+                   className="w-full"
+                 />
+              </div>
+            </div>
           </div>
-          <div className="flex gap-2 self-start sm:self-auto min-w-[200px] justify-end">
-            {!isLive && !hasPlacedBet && (
-              <>
-                <OddsButton
-                  selection={matchup.spreadHome}
-                  selected={isSelected(matchup.spreadHome.id)}
-                  onClick={() => handleOddsClick(matchup.spreadHome)}
-                />
-                <OddsButton
-                  selection={matchup.moneylineHome}
-                  selected={isSelected(matchup.moneylineHome.id)}
-                  onClick={() => handleOddsClick(matchup.moneylineHome)}
-                />
-              </>
-            )}
-          </div>
-        </div>
+        )}
 
         {/* Status Banner */}
         {(isLive || hasPlacedBet) && (
-          <div className="w-full">
+          <div className="w-full mt-2 px-0 sm:px-4">
             {isLive ? (
-              <div className="flex items-center gap-2 py-3 border border-red-500/20 bg-red-500/10 rounded-lg w-full justify-center text-red-500 font-bold uppercase text-xs tracking-widest">
-                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+              <div className="flex items-center gap-2 py-3 sm:py-4 border border-red-500/20 bg-red-500/10 rounded-xl w-full justify-center text-red-500 font-bold uppercase text-xs sm:text-sm tracking-widest">
+                <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]"></span>
                 Match Is Live
               </div>
             ) : (
-              <div className="flex items-center gap-2 py-3 border border-[#c1ff00]/20 bg-[#c1ff00]/10 rounded-lg w-full justify-center text-[#c1ff00] font-bold uppercase text-xs tracking-widest">
-                <span>✓</span> Bet Placed
+              <div className="flex items-center gap-2 py-3 sm:py-4 border border-[#c1ff00]/20 bg-[#c1ff00]/10 rounded-xl w-full justify-center text-[#c1ff00] font-bold uppercase text-xs sm:text-sm tracking-widest">
+                <span>✓</span> Bet Placed on Matchup
               </div>
             )}
           </div>
@@ -175,8 +211,10 @@ export function MatchupCard({ matchup }: { matchup: any }) {
         {showAdvancedStats && (
           <div className="mt-4 flex flex-col gap-3 animate-in slide-in-from-top-2 fade-in duration-300">
             {compareStats.map((stat) => {
-              const awayVal = matchup.awayTeam.stats[stat.key];
-              const homeVal = matchup.homeTeam.stats[stat.key];
+              const combinedAway = getCombinedStats(matchup.awayTeam);
+              const combinedHome = getCombinedStats(matchup.homeTeam);
+              const awayVal = combinedAway[stat.key];
+              const homeVal = combinedHome[stat.key];
               const total = awayVal + homeVal || 1;
               const awayPct = (awayVal / total) * 100;
               const homePct = (homeVal / total) * 100;
@@ -197,9 +235,9 @@ export function MatchupCard({ matchup }: { matchup: any }) {
               return (
                 <div key={stat.key} className="flex flex-col gap-1 text-[10px] sm:text-xs">
                   <div className="flex justify-between items-center text-white/70 font-mono">
-                    <span className={`font-bold ${awayWins ? 'text-white' : ''}`}>{Number.isInteger(awayVal) ? awayVal : awayVal.toFixed(1)}</span>
+                    <span className={`font-bold ${awayWins ? 'text-white' : ''}`}>{Number.isInteger(awayVal) ? awayVal : Number(awayVal).toFixed(1)}</span>
                     <span className="uppercase tracking-wider text-white/40">{stat.label}</span>
-                    <span className={`font-bold ${homeWins ? 'text-white' : ''}`}>{Number.isInteger(homeVal) ? homeVal : homeVal.toFixed(1)}</span>
+                    <span className={`font-bold ${homeWins ? 'text-white' : ''}`}>{Number.isInteger(homeVal) ? homeVal : Number(homeVal).toFixed(1)}</span>
                   </div>
                   <div className="h-1 w-full bg-white/5 rounded-full flex overflow-hidden">
                     <div
@@ -221,23 +259,21 @@ export function MatchupCard({ matchup }: { matchup: any }) {
   );
 }
 
-function OddsButton({ selection, selected, onClick }: any) {
+function OddsButton({ selection, selected, onClick, className = "" }: any) {
   return (
     <button
       onClick={onClick}
-      className={`btn-odds px-2 sm:px-4 py-2 sm:py-3 rounded w-20 sm:w-24 text-center group flex flex-col items-center justify-center ${selected ? "active" : ""}`}
+      className={`btn-odds px-2 py-2 sm:py-3 rounded max-w-[140px] text-center group flex flex-col items-center justify-center ${selected ? "active" : ""} ${className}`}
     >
       <div
-        className={`text-[9px] sm:text-[10px] font-bold uppercase ${selected ? "text-black" : "text-white/40"}`}
+        className={`text-[10px] sm:text-xs font-bold uppercase ${selected ? "text-black" : "text-white/60"}`}
       >
-        {selection.type === "spread" ? "Spread" : "Money"}
+        {selection.type === "spread" ? selection.label : "Moneyline"}
       </div>
       <div
-        className={`font-mono font-bold text-xs sm:text-sm ${selected ? "text-black" : "text-white"}`}
+        className={`font-mono font-bold text-sm sm:text-base ${selected ? "text-black" : "text-[#c1ff00]"}`}
       >
-        {selection.type === "spread"
-          ? selection.label
-          : (selection.americanOdds > 0 ? "+" : "") + selection.americanOdds}
+        {(selection.americanOdds > 0 ? "+" : "") + selection.americanOdds}
       </div>
     </button>
   );
