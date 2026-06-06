@@ -8,6 +8,7 @@ import {
   runTransaction,
 } from "firebase/firestore";
 import { db } from "../firebase";
+import { generateMatchNews } from "./generateNews";
 
 export const settleMatch = async (matchId, homeScore, awayScore) => {
   try {
@@ -18,6 +19,15 @@ export const settleMatch = async (matchId, homeScore, awayScore) => {
     const matchData = matchSnap.data();
     const homeTeamId = matchData.homeTeamId;
     const awayTeamId = matchData.awayTeamId;
+
+    // Fetch team names
+    const homeTeamSnap = await getDoc(doc(db, "teams", homeTeamId));
+    const awayTeamSnap = await getDoc(doc(db, "teams", awayTeamId));
+    const homeTeamName = homeTeamSnap.exists() ? homeTeamSnap.data().name : homeTeamId;
+    const awayTeamName = awayTeamSnap.exists() ? awayTeamSnap.data().name : awayTeamId;
+
+    const winner = homeScore > awayScore ? homeTeamName : (awayScore > homeScore ? awayTeamName : "Tie");
+    const loser = homeScore > awayScore ? awayTeamName : (awayScore > homeScore ? homeTeamName : "Tie");
 
     // Fetch bets
     const betsQuery = query(
@@ -109,6 +119,18 @@ export const settleMatch = async (matchId, homeScore, awayScore) => {
         awayScore,
       });
     });
+
+    // Trigger AI News Generation asynchronously
+    generateMatchNews({
+       matchId,
+       homeScore,
+       awayScore,
+       homeTeam: homeTeamName,
+       awayTeam: awayTeamName,
+       winner,
+       loser
+    });
+
   } catch (error) {
     console.error("Error settling match: ", error);
     throw error;

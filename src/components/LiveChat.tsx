@@ -15,10 +15,11 @@ export function LiveChat() {
   const [showModTools, setShowModTools] = useState(false);
 
   useEffect(() => {
-    // Only fetch messages if chat is open to save reads, or always fetch?
-    // Let's always fetch so there's no delay when opening, or just fetch when open.
-    // The prompt says real-time Firestore sync. Let's do it always or when open.
-    // If it's a floating chat, probably better when open or always.
+    if (!user) {
+      setMessages([]);
+      return;
+    }
+
     const q = query(collection(db, "chat_messages"), orderBy("timestamp", "asc"), limit(50));
     
     const unsubscribe = onSnapshot(q, (snapshot) => {

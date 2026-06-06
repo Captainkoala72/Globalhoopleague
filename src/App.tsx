@@ -20,6 +20,7 @@ import { Standings } from "./pages/Standings";
 import { Results } from "./pages/Results";
 import { Leaderboard } from "./pages/Leaderboard";
 import { Settings } from "./pages/Settings";
+import { HoopBuzz } from "./pages/HoopBuzz";
 
 function ProtectedRoute({ children, reqRole }: any) {
   const { profile, loading } = useAuth();
@@ -107,6 +108,7 @@ function DashboardLayout({ children }) {
   else if (location.pathname === "/schedule") activeTab = "schedule";
   else if (location.pathname === "/standings") activeTab = "standings";
   else if (location.pathname === "/results") activeTab = "results";
+  else if (location.pathname === "/hoopbuzz") activeTab = "hoopbuzz";
   else if (location.pathname === "/leaderboard") activeTab = "leaderboard";
 
   return (
@@ -143,6 +145,7 @@ function MainApp() {
             <Route path="/schedule" element={<Schedule />} />
             <Route path="/standings" element={<Standings />} />
             <Route path="/results" element={<Results />} />
+            <Route path="/hoopbuzz" element={<HoopBuzz />} />
             <Route path="/free-dimes" element={<FreeDimes />} />
             <Route path="/my-bets" element={<MyBets />} />
             <Route path="/leaderboard" element={<Leaderboard />} />

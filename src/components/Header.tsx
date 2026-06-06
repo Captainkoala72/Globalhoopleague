@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { LogOut, PlayCircle, Gift, Menu, X, CalendarDays, Trophy, ListOrdered, Receipt, ShieldAlert, Award, Settings } from "lucide-react";
+import { LogOut, PlayCircle, Gift, Menu, X, CalendarDays, Trophy, ListOrdered, Receipt, ShieldAlert, Award, Settings, Newspaper } from "lucide-react";
 import { useBetting } from "../context/BettingContext";
 import { useAuth } from "../context/AuthContext";
 import { Link } from "react-router-dom";
@@ -30,11 +30,14 @@ export function Header({ activeTab }) {
   return (
     <header ref={headerRef} className="sticky top-0 z-50 flex items-center justify-between px-4 sm:px-6 md:px-8 h-16 border-b border-white/10 bg-black/80 backdrop-blur-xl">
       {/* Left: Logo Area */}
-      <div className="flex items-center min-w-0">
-        <span className="text-sm sm:text-base md:text-xl font-black tracking-tight italic uppercase text-white leading-snug truncate">
-          GLOBAL HOOP LEAGUE<span className="hidden sm:inline text-white/60 ml-1.5">BETTING SIMULATOR</span>
+      <Link to="/" className="flex flex-col justify-center min-w-0 group hover:opacity-90 transition-opacity">
+        <span className="text-[15px] sm:text-lg md:text-xl font-black tracking-tighter uppercase text-white leading-none">
+          GLOBAL HOOP LEAGUE
         </span>
-      </div>
+        <span className="text-[9px] sm:text-[10px] md:text-[11px] font-bold tracking-[0.25em] uppercase text-[#BCF900] leading-none mt-1 drop-shadow-[0_0_6px_rgba(188,249,0,0.4)] group-hover:drop-shadow-[0_0_10px_rgba(188,249,0,0.6)] transition-all">
+          BETTING SIMULATOR
+        </span>
+      </Link>
 
       {/* Right: Balance & Hamburger */}
       <div className="flex items-center gap-3 sm:gap-4 shrink-0">
@@ -116,6 +119,16 @@ export function Header({ activeTab }) {
             >
               <PlayCircle size={18} className={activeTab === "results" ? "text-[#c1ff00]" : "text-white/50"} />
               Results
+            </Link>
+            <Link
+              to="/hoopbuzz"
+              onClick={() => setMenuOpen(false)}
+              className={`flex items-center gap-3 px-6 py-4 text-sm font-bold uppercase tracking-wider transition-colors hover:bg-white/5 ${
+                activeTab === "hoopbuzz" ? "text-[#c1ff00]" : "text-white/80 hover:text-white"
+              }`}
+            >
+              <Newspaper size={18} className={activeTab === "hoopbuzz" ? "text-[#c1ff00]" : "text-white/50"} />
+              HoopBuzz
             </Link>
             <Link
               to="/my-bets"
