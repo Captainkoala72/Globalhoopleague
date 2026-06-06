@@ -322,12 +322,24 @@ Playoff Stats: ${JSON.stringify(currentAwayTeam.playoffStats)}
 Coach: ${JSON.stringify(awayCoach || "No coach info")}
 `;
 
+      let data: any;
+
       const response = await fetch("/api/generate-odds", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt }),
       });
-      const data = await response.json();
+      
+      const contentType = response.headers.get("content-type");
+      if (!response.ok || !contentType || !contentType.includes("application/json")) {
+        console.warn("Backend not available, trying client-side fallback...");
+        // Fallback for static hosting deployments
+        const { askForApiKeyAndGenerate } = await import("../utils/aiClientFallback");
+        data = await askForApiKeyAndGenerate(prompt, "odds");
+      } else {
+        data = await response.json();
+      }
+
       if (data.homeWinProb) {
         setAiProb(data.homeWinProb);
         // Default to a 50% blend if slider is at 0 so they can see the effect immediately

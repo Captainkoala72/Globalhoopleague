@@ -52,17 +52,21 @@ export async function generateHoopBuzzPost(matchDetails: any) {
     `;
 
     // Note: Due to security guidelines, the @google/genai SDK is called server-side via this proxy endpoint.
+    let data: any;
     const response = await fetch("/api/generate-news", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ prompt }),
     });
 
-    if (!response.ok) {
-        throw new Error(`Error: ${response.status} ${response.statusText}`);
+    const contentType = response.headers.get("content-type");
+    if (!response.ok || !contentType || !contentType.includes("application/json")) {
+        console.warn("Backend not available, trying client-side fallback...");
+        const { askForApiKeyAndGenerate } = await import("./aiClientFallback");
+        data = await askForApiKeyAndGenerate(prompt, "news");
+    } else {
+        data = await response.json();
     }
-
-    const data = await response.json();
     
     // Check if we got text back
     if (!data.text) {
