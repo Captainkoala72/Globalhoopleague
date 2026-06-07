@@ -7,7 +7,7 @@ export function MyBets() {
 
   const activeBets = placedBets.filter((b) => b.status === "open");
   const settledBets = placedBets.filter(
-    (b) => b.status === "won" || b.status === "lost" || b.status === "push",
+    (b) => b.status === "won" || b.status === "lost" || b.status === "push" || b.status === "refunded",
   );
 
   const betsToShow = activeTab === "active" ? activeBets : settledBets;
@@ -57,6 +57,9 @@ export function MyBets() {
             else if (bet.status === "lost")
               badgeColor =
                 "bg-red-500/20 text-red-500 border border-red-500/50";
+            else if (bet.status === "refunded")
+              badgeColor =
+                "bg-blue-500/20 text-blue-400 border border-blue-500/50";
 
             return (
               <div
@@ -69,6 +72,9 @@ export function MyBets() {
                 )}
                 {isSettled && bet.status === "lost" && (
                   <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/10 blur-3xl rounded-full -mr-16 -mt-16 pointer-events-none" />
+                )}
+                {isSettled && bet.status === "refunded" && (
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 blur-3xl rounded-full -mr-16 -mt-16 pointer-events-none" />
                 )}
 
                 <div className="relative z-10">
@@ -146,13 +152,15 @@ export function MyBets() {
                         {isSettled ? "Actual Payout" : "To Win"}
                       </div>
                       <div
-                        className={`font-mono font-bold ${bet.status === "lost" ? "text-white/40" : "accent-glow"}`}
+                        className={`font-mono font-bold ${bet.status === "lost" ? "text-white/40" : bet.status === "refunded" ? "text-blue-400" : "accent-glow"}`}
                       >
                         {isSettled
-                          ? (bet.actualPayout || 0).toFixed(2)
+                          ? bet.status === "refunded" 
+                            ? bet.stake.toFixed(2)
+                            : (bet.actualPayout || 0).toFixed(2)
                           : bet.potentialPayout.toFixed(2)}{" "}
                         <span
-                          className={`${bet.status === "lost" ? "text-white/40" : "text-[#c1ff00]"} text-[10px]`}
+                          className={`${bet.status === "lost" ? "text-white/40" : bet.status === "refunded" ? "text-blue-400" : "text-[#c1ff00]"} text-[10px]`}
                         >
                           $Dimes
                         </span>

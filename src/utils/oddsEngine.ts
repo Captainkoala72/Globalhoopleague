@@ -1,18 +1,44 @@
-export function calculateMarketOdds(homeTeam, awayTeam, weights) {
-  const calcPower = (t) => {
+export const getCombinedStats = (team) => {
+  const s = { ...team.stats };
+  const p = team.playoffStats;
+
+  const hasAllPlayoffStats = p && 
+    p.ppg !== "" && p.ppg != null &&
+    p.oppg !== "" && p.oppg != null &&
+    p.fgPct !== "" && p.fgPct != null &&
+    p.threePtPct !== "" && p.threePtPct != null &&
+    p.wins !== "" && p.wins != null &&
+    p.losses !== "" && p.losses != null;
+
+  if (hasAllPlayoffStats) {
+    s.ppg = Number(((Number(s.ppg) + Number(p.ppg)) / 2).toFixed(1));
+    s.oppg = Number(((Number(s.oppg) + Number(p.oppg)) / 2).toFixed(1));
+    s.fgPct = Number(((Number(s.fgPct) + Number(p.fgPct)) / 2).toFixed(1));
+    s.threePtPct = Number(((Number(s.threePtPct) + Number(p.threePtPct)) / 2).toFixed(1));
+    s.wins = Number(s.wins) + Number(p.wins);
+    s.losses = Number(s.losses) + Number(p.losses);
+  }
+  
+  return s;
+};
+
+export function calculateMarketOdds(homeTeam: any, awayTeam: any, weights: any, aiData?: any) {
+  const calcPower = (t: any) => {
+    const combined = getCombinedStats(t);
+    
     // Star Rating Score: Math around 0-100 logic. 5.0 avg -> 100
     const starScore =
-      ((t.stats.offense + t.stats.defense + t.stats.overall) / 3) * 20;
+      ((combined.offense + combined.defense + combined.overall) / 3) * 20;
     // Averages score: normalized loosely around ~50 for typical teams
-    let avgScore = 50 + (t.stats.ppg - t.stats.oppg) * 2.5;
-    avgScore += (t.stats.fgPct - 45) * 1.5;
-    avgScore += (t.stats.threePtPct - 35) * 1.5;
-    avgScore -= (t.stats.topg - 12) * 2;
+    let avgScore = 50 + (combined.ppg - combined.oppg) * 2.5;
+    avgScore += (combined.fgPct - 45) * 1.5;
+    avgScore += (combined.threePtPct - 35) * 1.5;
+    avgScore -= ((combined.topg || 12) - 12) * 2;
     avgScore = Math.max(0, Math.min(100, avgScore));
 
     // Record score: 0-100 based on win pct
-    const winTotal = t.stats.wins + t.stats.losses;
-    const winPct = winTotal > 0 ? t.stats.wins / winTotal : 0.5;
+    const winTotal = combined.wins + combined.losses;
+    const winPct = winTotal > 0 ? combined.wins / winTotal : 0.5;
     const recScore = winPct * 100;
 
     // Apply normalized weights
@@ -41,16 +67,33 @@ export function calculateMarketOdds(homeTeam, awayTeam, weights) {
     rawSpread += rawSpread < 0 ? -0.5 : 0.5;
   }
 
-  const homeSpreadNum = rawSpread;
-  const awaySpreadNum = -rawSpread;
-
-  const homeSpdLabel = `${homeSpreadNum > 0 ? "+" : ""}${homeSpreadNum}`;
-  const awaySpdLabel = `${awaySpreadNum > 0 ? "+" : ""}${awaySpreadNum}`;
+  let homeSpreadNum = rawSpread;
+  let awaySpreadNum = -rawSpread;
 
   // Win probability mapping: let's roughly say 1 pt of spread = ~3.2% probability away from 50%
   let homeWinProb = 0.5 + -homeSpreadNum * 0.032;
   homeWinProb = Math.max(0.01, Math.min(0.99, homeWinProb)); // Clamp between 0.01 and 0.99
+  
+  const baseWinProb = homeWinProb;
+  
+  if (aiData && typeof aiData.aiProb === 'number' && typeof aiData.aiWeight === 'number') {
+    homeWinProb = (homeWinProb * (1 - (aiData.aiWeight / 100))) + (aiData.aiProb * (aiData.aiWeight / 100));
+    
+    // adjust spread back based on new blended probability
+    let newRawSpread = (0.5 - homeWinProb) / 0.032;
+    newRawSpread = Math.round(newRawSpread * 2) / 2;
+    if (newRawSpread === 0) newRawSpread = -1;
+    else if (Number.isInteger(newRawSpread)) {
+      newRawSpread += newRawSpread < 0 ? -0.5 : 0.5;
+    }
+    homeSpreadNum = newRawSpread;
+    awaySpreadNum = -newRawSpread;
+  }
+
   const awayWinProb = 1 - homeWinProb;
+  
+  const homeSpdLabel = `${homeSpreadNum > 0 ? "+" : ""}${homeSpreadNum}`;
+  const awaySpdLabel = `${awaySpreadNum > 0 ? "+" : ""}${awaySpreadNum}`;
 
   const toAmerican = (prob) => {
     // Adding vigorous juice of about +2.5% per side
@@ -109,5 +152,6 @@ export function calculateMarketOdds(homeTeam, awayTeam, weights) {
     spreadAway,
     homeWinProb,
     awayWinProb,
+    baseWinProb,
   };
 }

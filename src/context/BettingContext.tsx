@@ -10,6 +10,8 @@ import {
   query,
   where,
   addDoc,
+  increment,
+  getDocs,
 } from "firebase/firestore";
 import { db } from "../firebase";
 
@@ -28,10 +30,8 @@ export function BettingProvider({ children }) {
   const [scheduledMatchups, setScheduledMatchups] = useState([]);
   const [settledMatchups, setSettledMatchups] = useState([]);
 
-  // Real-time Firestore Listeners
+  // Public Real-time Firestore Listeners
   useEffect(() => {
-    if (!user) return; // Only listen if authenticated
-
     const unsubTeams = onSnapshot(
       collection(db, "teams"),
       (snapshot) => {
@@ -78,6 +78,20 @@ export function BettingProvider({ children }) {
       },
     );
 
+    return () => {
+      unsubTeams();
+      unsubSettings();
+      unsubMatches();
+    };
+  }, []);
+
+  // Private Real-time Firestore Listeners
+  useEffect(() => {
+    if (!user) {
+      setPlacedBets([]);
+      return;
+    }
+
     const q = query(collection(db, "bets"), where("userId", "==", user.uid));
     const unsubBets = onSnapshot(
       q,
@@ -98,9 +112,6 @@ export function BettingProvider({ children }) {
     );
 
     return () => {
-      unsubTeams();
-      unsubSettings();
-      unsubMatches();
       unsubBets();
     };
   }, [user]);
@@ -123,6 +134,7 @@ export function BettingProvider({ children }) {
         homeTeam,
         awayTeam,
         startTime: rm.date,
+        week: rm.week,
         status: rm.status,
         homeScore: rm.homeScore,
         awayScore: rm.awayScore,
@@ -162,7 +174,7 @@ export function BettingProvider({ children }) {
         formattedMatchups.push(m);
       } else if (rm.status === "scheduled") {
         scheduled.push(m);
-      } else if (rm.status === "settled") {
+      } else if (rm.status === "settled" || rm.status === "cancelled") {
         settled.push(m);
       }
     });
@@ -215,6 +227,43 @@ export function BettingProvider({ children }) {
     if (profile?.role !== "admin") return;
     await updateTeams(INITIAL_TEAMS);
     await updateWeights(INITIAL_WEIGHTS);
+  };
+
+  const cancelMatch = async (matchId: string) => {
+    if (profile?.role !== "admin") return;
+    try {
+      const batch = writeBatch(db);
+      
+      // Step A: Cancel the match
+      const matchRef = doc(db, "matches", matchId);
+      batch.update(matchRef, { status: "cancelled" });
+
+      // Step B: Query bets for this match
+      const betsQuery = query(collection(db, "bets"), where("matchupId", "==", matchId));
+      const betsSnapshot = await getDocs(betsQuery);
+
+      if (!betsSnapshot.empty) {
+        // Step C & D: Update bets and refund users
+        betsSnapshot.forEach((betDoc) => {
+          const betData = betDoc.data();
+          if (betData.status !== "refunded") {
+            const betRef = doc(db, "bets", betDoc.id);
+            batch.update(betRef, { status: "refunded" });
+            
+            // Refund user balance
+            if (betData.userId && betData.stake) {
+              const userRef = doc(db, "users", betData.userId);
+              batch.update(userRef, { balance: increment(betData.stake) });
+            }
+          }
+        });
+      }
+
+      await batch.commit();
+    } catch (error) {
+      console.error("Firebase Batch Error:", error);
+      throw error;
+    }
   };
 
   const getTeamById = (id) => teams.find((t) => t.id === id);
@@ -304,6 +353,7 @@ export function BettingProvider({ children }) {
         updateTeams,
         updateWeights,
         resetToDefaults,
+        cancelMatch,
       }}
     >
       {children}

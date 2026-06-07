@@ -8,6 +8,7 @@ import {
   runTransaction,
 } from "firebase/firestore";
 import { db } from "../firebase";
+import { generateHoopBuzzPost } from "./generateNews";
 
 export const settleMatch = async (matchId, homeScore, awayScore) => {
   try {
@@ -18,6 +19,15 @@ export const settleMatch = async (matchId, homeScore, awayScore) => {
     const matchData = matchSnap.data();
     const homeTeamId = matchData.homeTeamId;
     const awayTeamId = matchData.awayTeamId;
+
+    // Fetch team names
+    const homeTeamSnap = await getDoc(doc(db, "teams", homeTeamId));
+    const awayTeamSnap = await getDoc(doc(db, "teams", awayTeamId));
+    const homeTeamName = homeTeamSnap.exists() ? homeTeamSnap.data().name : homeTeamId;
+    const awayTeamName = awayTeamSnap.exists() ? awayTeamSnap.data().name : awayTeamId;
+
+    const winner = homeScore > awayScore ? homeTeamName : (awayScore > homeScore ? awayTeamName : "Tie");
+    const loser = homeScore > awayScore ? awayTeamName : (awayScore > homeScore ? homeTeamName : "Tie");
 
     // Fetch bets
     const betsQuery = query(
@@ -77,24 +87,43 @@ export const settleMatch = async (matchId, homeScore, awayScore) => {
       }
     });
 
+    const recentUserBets: any[] = [];
+    const allUserIds = Array.from(new Set(betsSnap.docs.map((d) => d.data().userId)));
+    const uidToName: Record<string, string> = {};
+
     // Run a transaction to safely update user balances and write the rest
     await runTransaction(db, async (transaction) => {
-      // 1. Read all users that need payouts
-      const userRefs = Object.keys(userPayouts).map((uid) =>
-        doc(db, "users", uid),
-      );
-      const userSnaps = await Promise.all(
-        userRefs.map((ref) => transaction.get(ref)),
-      );
+      // 1. Read all users who bet
+      const userRefs = allUserIds.map((uid) => doc(db, "users", uid));
+      const userSnaps = await Promise.all(userRefs.map((ref) => transaction.get(ref)));
 
       userSnaps.forEach((userSnap) => {
         if (userSnap.exists()) {
-          const currentBalance = userSnap.data().balance || 0;
-          const payoutAmount = userPayouts[userSnap.id];
-          transaction.update(userSnap.ref, {
-            balance: currentBalance + payoutAmount,
-          });
+          const ud = userSnap.data();
+          uidToName[userSnap.id] = ud.displayName || ud.username || "Anonymous Bettor";
+          
+          if (userPayouts[userSnap.id]) {
+            const currentBalance = ud.balance || 0;
+            const payoutAmount = userPayouts[userSnap.id];
+            transaction.update(userSnap.ref, {
+              balance: currentBalance + payoutAmount,
+            });
+          }
         }
+      });
+
+      // Populate recentUserBets
+      betsSnap.docs.forEach((betDoc) => {
+        const bd = betDoc.data();
+        const betUpdated = betUpdates.find((bu) => bu.ref.id === betDoc.id);
+        const st = betUpdated ? betUpdated.data.status : bd.status;
+        recentUserBets.push({
+          displayName: uidToName[bd.userId] || "Anonymous Bettor",
+          stake: bd.stake,
+          type: bd.selection?.type || "unknown",
+          team: bd.selectedTeamName || "unknown",
+          status: st, // 'won', 'lost', 'push'
+        });
       });
 
       // 2. Update bets
@@ -109,6 +138,39 @@ export const settleMatch = async (matchId, homeScore, awayScore) => {
         awayScore,
       });
     });
+
+    // Extract odds data
+    const oddsCalculatorData = matchData.oddsCalculatorData || {
+        baseWinProb: matchData.homeWinProb,
+        aiWinProb: null,
+        aiWeight: 0
+    };
+    oddsCalculatorData.spreadHome = matchData.spreadHome?.label;
+    oddsCalculatorData.spreadAway = matchData.spreadAway?.label;
+    oddsCalculatorData.moneylineHome = matchData.moneylineHome?.label;
+    oddsCalculatorData.moneylineAway = matchData.moneylineAway?.label;
+
+    // Fetch Home and Away Coaches
+    const coachesSnap = await getDocs(collection(db, "coaches"));
+    const coachesData = coachesSnap.docs.map(d => ({id: d.id, ...d.data()}));
+    const homeCoach = coachesData.find((c: any) => c.teamName === homeTeamName);
+    const awayCoach = coachesData.find((c: any) => c.teamName === awayTeamName);
+
+    // Trigger AI News Generation asynchronously
+    generateHoopBuzzPost({
+       matchId,
+       homeScore,
+       awayScore,
+       homeTeam: homeTeamName,
+       awayTeam: awayTeamName,
+       homeCoach,
+       awayCoach,
+       winner,
+       loser,
+       oddsCalculatorData,
+       recentUserBets
+    });
+
   } catch (error) {
     console.error("Error settling match: ", error);
     throw error;
