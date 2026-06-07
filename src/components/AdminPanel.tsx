@@ -313,12 +313,24 @@ function OddsCalculatorView() {
         homeInsights = allCompleted
             .filter((m: any) => m.homeTeamId === currentHomeTeam.id || m.awayTeamId === currentHomeTeam.id)
             .slice(-10) // recency window 10 matches
-            .map((m: any) => ({ narrative: m.matchInsights.gameNarrative, stats: m.matchInsights.teamStats }));
+            .map((m: any) => {
+              const isHome = m.homeTeamId === currentHomeTeam.id;
+              return { 
+                narrative: m.matchInsights.gameNarrative, 
+                stats: isHome ? m.matchInsights.teamStats?.home : m.matchInsights.teamStats?.away 
+              };
+            });
             
         awayInsights = allCompleted
             .filter((m: any) => m.homeTeamId === currentAwayTeam.id || m.awayTeamId === currentAwayTeam.id)
             .slice(-10)
-            .map((m: any) => ({ narrative: m.matchInsights.gameNarrative, stats: m.matchInsights.teamStats }));
+            .map((m: any) => {
+              const isHome = m.homeTeamId === currentAwayTeam.id;
+              return { 
+                narrative: m.matchInsights.gameNarrative, 
+                stats: isHome ? m.matchInsights.teamStats?.home : m.matchInsights.teamStats?.away 
+              };
+            });
       } catch (err) {
         console.error("Failed to fetch match insights", err);
       }
@@ -334,13 +346,13 @@ Analytical Guardrails:
 3. Coaching Matchup: Analyze the coaching attributes. Determine playstyle clashes (e.g., does a Fast Paced offense expose a Conservative defense?). Weigh the Leadership and Motivation stats heavily for underdog scenarios or clutch moments. Adjust the final win probability based on which coach has the tactical advantage.
 4. Playoff Stats Interpretation: If all provided Playoff Stats for a team are exactly 0, this indicates the team has not played any playoff matches yet. You must completely ignore the playoff stats category for this team. Do not apply a penalty, do not factor 0-averages into their rating, and rely strictly on their Regular Season stats and recent 5-10 game team trends instead. If one team has active playoff stats and the other doesn't, evaluate the first team's playoff experience as a standalone asset, without penalizing the other team for their lack of playoff stats.
 
-Home Team: ${currentHomeTeam.name}
+Team A (Home): ${currentHomeTeam.name}
 Stats: ${JSON.stringify(currentHomeTeam.stats)}
 Playoff Stats: ${JSON.stringify(currentHomeTeam.playoffStats)}
 Recent Insights (Narrative & Stats): ${JSON.stringify(homeInsights)}
 Coach: ${JSON.stringify(homeCoach || "No coach info")}
 
-Away Team: ${currentAwayTeam.name}
+Team B (Away): ${currentAwayTeam.name}
 Stats: ${JSON.stringify(currentAwayTeam.stats)}
 Playoff Stats: ${JSON.stringify(currentAwayTeam.playoffStats)}
 Recent Insights (Narrative & Stats): ${JSON.stringify(awayInsights)}

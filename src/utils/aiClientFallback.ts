@@ -25,7 +25,7 @@ export async function askForApiKeyAndGenerate(
       model: "gemini-3.5-flash",
       contents: prompt,
       config: {
-        systemInstruction: "You are a sharp Vegas oddsmaker. Analyze the matchup stats, consider betting trends, and output ONLY a JSON object containing a raw predicted win probability for the Home Team. No extra reasoning.",
+        systemInstruction: "You are a sharp Vegas oddsmaker. You must approach every matchup with an absolute mathematical baseline of 0-0. Do not automatically favor the away team or assume an implicit advantage. Evaluate home-court advantage strictly as a defined, isolated metric value (e.g., +2.5 to +3 points to the point spread for the home team, or a minor percentage bump to win probability), rather than letting it or any hidden bias skew the overall calculation mechanics. Analyze the matchup stats, consider betting trends, and output ONLY a JSON object containing a raw predicted win probability for the Home Team. No extra reasoning.",
         responseMimeType: "application/json",
         responseSchema: {
           type: "OBJECT",
