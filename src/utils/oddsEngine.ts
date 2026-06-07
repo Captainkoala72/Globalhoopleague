@@ -1,4 +1,4 @@
-export const getCombinedStats = (team) => {
+export const getCombinedStats = (team: any) => {
   const s = { ...team.stats };
   const p = team.playoffStats;
 
@@ -10,7 +10,15 @@ export const getCombinedStats = (team) => {
     p.wins !== "" && p.wins != null &&
     p.losses !== "" && p.losses != null;
 
-  if (hasAllPlayoffStats) {
+  const isAllZeroes = hasAllPlayoffStats && 
+    Number(p.ppg) === 0 && 
+    Number(p.oppg) === 0 && 
+    Number(p.fgPct) === 0 && 
+    Number(p.threePtPct) === 0 && 
+    Number(p.wins) === 0 && 
+    Number(p.losses) === 0;
+
+  if (hasAllPlayoffStats && !isAllZeroes) {
     s.ppg = Number(((Number(s.ppg) + Number(p.ppg)) / 2).toFixed(1));
     s.oppg = Number(((Number(s.oppg) + Number(p.oppg)) / 2).toFixed(1));
     s.fgPct = Number(((Number(s.fgPct) + Number(p.fgPct)) / 2).toFixed(1));

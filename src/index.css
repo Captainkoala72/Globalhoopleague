@@ -16,14 +16,17 @@
 
 .glass-card {
   background: rgba(255, 255, 255, 0.03);
+  -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
+  transform: translateZ(0);
 }
 
 .accent-glow {
   color: #c1ff00;
   text-shadow: 0 0 10px rgba(193, 255, 0, 0.3);
+  transform: translateZ(0);
 }
 
 .btn-odds {

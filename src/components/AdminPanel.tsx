@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { ChevronDown, ChevronUp, Upload } from "lucide-react";
 import { useBetting } from "../context/BettingContext";
 import { calculateMarketOdds } from "../utils/oddsEngine";
 import {
@@ -12,6 +12,7 @@ import {
 import { db } from "../firebase";
 
 import { settleMatch } from "../utils/settlementEngine";
+import { analyzeMatchScreenshot } from "../utils/analyzeMatchScreenshot";
 
 export function AdminPanel() {
   const [activeView, setActiveView] = useState("schedule");
@@ -301,24 +302,48 @@ function OddsCalculatorView() {
       const homeCoach = allCoaches.find(c => c.teamName === currentHomeTeam.name);
       const awayCoach = allCoaches.find(c => c.teamName === currentAwayTeam.name);
 
+      let homeInsights: any[] = [];
+      let awayInsights: any[] = [];
+      try {
+        const matchesSnap = await getDocs(collection(db, "matches"));
+        const allCompleted = matchesSnap.docs
+            .map(doc => doc.data())
+            .filter(m => m.status === "completed" && m.matchInsights);
+            
+        homeInsights = allCompleted
+            .filter((m: any) => m.homeTeamId === currentHomeTeam.id || m.awayTeamId === currentHomeTeam.id)
+            .slice(-10) // recency window 10 matches
+            .map((m: any) => ({ narrative: m.matchInsights.gameNarrative, stats: m.matchInsights.teamStats }));
+            
+        awayInsights = allCompleted
+            .filter((m: any) => m.homeTeamId === currentAwayTeam.id || m.awayTeamId === currentAwayTeam.id)
+            .slice(-10)
+            .map((m: any) => ({ narrative: m.matchInsights.gameNarrative, stats: m.matchInsights.teamStats }));
+      } catch (err) {
+        console.error("Failed to fetch match insights", err);
+      }
+
       const prompt = `Act as a sharp Vegas oddsmaker. Analyze this matchup and output JSON with the "homeWinProb".
       
 Analytical Guardrails:
 1. Strict Recency Window: Strictly analyze team history and trend data from only the last 5 to 10 matches. Any statistical data or performance history older than 10 matches is completely irrelevant to current trends and must be ignored.
-2. Situational & Behavioral Weighting: Evaluate and adjust the probability based on specific team personalities and situational factors, including:
+2. Situational & Behavioral Weighting: When calculating the win probability, heavily factor in the historical gameNarrative data from recent matches. If a team has a trend of '4th Quarter Comebacks', give them a slight probability boost in tight matchups. If they suffer from '3rd Quarter Collapses', negatively weight their spread. Evaluate and adjust the probability based on specific team personalities and situational factors, including:
   - Clutch Factor: Whether a team excels or chokes in high-pressure, late-game situations.
   - Game Margins: Whether a team historically blows out opponents or tends to play exceptionally close, tight games.
   - Home/Away Splits: Identifying teams that have a heavy home-court advantage versus notable struggles when playing away.
 3. Coaching Matchup: Analyze the coaching attributes. Determine playstyle clashes (e.g., does a Fast Paced offense expose a Conservative defense?). Weigh the Leadership and Motivation stats heavily for underdog scenarios or clutch moments. Adjust the final win probability based on which coach has the tactical advantage.
+4. Playoff Stats Interpretation: If all provided Playoff Stats for a team are exactly 0, this indicates the team has not played any playoff matches yet. You must completely ignore the playoff stats category for this team. Do not apply a penalty, do not factor 0-averages into their rating, and rely strictly on their Regular Season stats and recent 5-10 game team trends instead. If one team has active playoff stats and the other doesn't, evaluate the first team's playoff experience as a standalone asset, without penalizing the other team for their lack of playoff stats.
 
 Home Team: ${currentHomeTeam.name}
 Stats: ${JSON.stringify(currentHomeTeam.stats)}
 Playoff Stats: ${JSON.stringify(currentHomeTeam.playoffStats)}
+Recent Insights (Narrative & Stats): ${JSON.stringify(homeInsights)}
 Coach: ${JSON.stringify(homeCoach || "No coach info")}
 
 Away Team: ${currentAwayTeam.name}
 Stats: ${JSON.stringify(currentAwayTeam.stats)}
 Playoff Stats: ${JSON.stringify(currentAwayTeam.playoffStats)}
+Recent Insights (Narrative & Stats): ${JSON.stringify(awayInsights)}
 Coach: ${JSON.stringify(awayCoach || "No coach info")}
 `;
 
@@ -715,6 +740,36 @@ function SettleMatchesView() {
     setCancellingId(matchId);
   };
 
+  const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
+
+  const handleFileUpload = async (matchId: string, event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setLoadingId(matchId);
+    try {
+      const data = await analyzeMatchScreenshot(file);
+      console.log("Extracted Data:", data);
+
+      if (data.quarterScores && data.quarterScores.homeFinal !== undefined && data.quarterScores.awayFinal !== undefined) {
+        handleScoreChange(matchId, "home", data.quarterScores.homeFinal);
+        handleScoreChange(matchId, "away", data.quarterScores.awayFinal);
+      }
+
+      const matchRef = doc(db, "matches", matchId);
+      await updateDoc(matchRef, { matchInsights: data });
+      alert("Match insights extracted and saved!");
+    } catch (e: any) {
+      console.error(e);
+      alert("Failed to extract data: " + e.message);
+    } finally {
+      setLoadingId(null);
+      if (fileInputRefs.current[matchId]) {
+        fileInputRefs.current[matchId]!.value = "";
+      }
+    }
+  };
+
 
   const allManageableMatchups = [...activeMatchups, ...scheduledMatchups];
 
@@ -795,16 +850,35 @@ function SettleMatchesView() {
               </div>
             </div>
 
-            <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto relative z-20 pointer-events-auto">
+            <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto relative z-20 pointer-events-auto items-center">
               {m.status === "active" && (
-                <button
-                  type="button"
-                  onClick={() => handleSettle(m.id)}
-                  disabled={loadingId === m.id}
-                  className="w-full md:w-auto px-6 py-4 bg-[#c1ff00] text-black font-black uppercase italic rounded-xl text-sm hover:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap cursor-pointer pointer-events-auto"
-                >
-                  {loadingId === m.id ? "Processing..." : "Settle"}
-                </button>
+                <>
+                  <div className="relative w-full md:w-auto">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      ref={(el) => { fileInputRefs.current[m.id] = el; }}
+                      onChange={(e) => handleFileUpload(m.id, e)}
+                      className="hidden"
+                      id={`file-upload-${m.id}`}
+                      disabled={loadingId === m.id}
+                    />
+                    <label
+                      htmlFor={`file-upload-${m.id}`}
+                      className="w-full flex items-center justify-center gap-2 md:w-auto px-6 py-4 bg-indigo-500/20 border border-indigo-500/50 text-indigo-400 font-black uppercase italic rounded-xl text-sm hover:bg-indigo-500/30 transition-all cursor-pointer whitespace-nowrap"
+                    >
+                      <Upload size={18} /> Extract AI
+                    </label>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleSettle(m.id)}
+                    disabled={loadingId === m.id}
+                    className="w-full md:w-auto px-6 py-4 bg-[#c1ff00] text-black font-black uppercase italic rounded-xl text-sm hover:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap cursor-pointer pointer-events-auto"
+                  >
+                    {loadingId === m.id ? "Processing..." : "Settle"}
+                  </button>
+                </>
               )}
               {cancellingId === m.id ? (
                 <div className="flex gap-2 w-full md:w-auto">
