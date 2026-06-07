@@ -90,8 +90,8 @@ export function Standings() {
                 <div className="text-center font-mono font-bold text-[#c1ff00] text-lg">
                   {index + 1}
                 </div>
-                <div className="font-black italic text-white uppercase sm:text-lg truncate flex items-center gap-2 sm:gap-3">
-                  <TeamLogo teamName={team.name} className="w-6 h-6 sm:w-8 sm:h-8 shrink-0" />
+                <div className="font-black italic text-white uppercase sm:text-lg truncate flex items-center gap-3 sm:gap-4">
+                  <TeamLogo teamName={team.name} className="w-10 h-10 sm:w-12 sm:h-12 shrink-0" />
                   <span className="truncate">{team.name}</span>
                 </div>
                 <div className="text-center font-bold text-white/60 text-sm">
