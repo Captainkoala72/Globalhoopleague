@@ -13,6 +13,18 @@ const DEFAULT_STATS = {
   losses: 10,
 };
 
+const DEFAULT_CURRENT_SEASON_STATS = {
+  fgPct: 0,
+  threePtPct: 0,
+  ftPct: 0,
+  rebounds: 0,
+  assists: 0,
+  fouls: 0,
+  steals: 0,
+  turnovers: 0,
+  blocks: 0,
+};
+
 export const INITIAL_TEAMS = [
   {
     id: "t_nyh",
@@ -30,6 +42,9 @@ export const INITIAL_TEAMS = [
       wins: 15,
       losses: 5,
     },
+    wins: 15,
+    losses: 5,
+    currentSeasonStats: { ...DEFAULT_CURRENT_SEASON_STATS },
   },
   {
     id: "t_dal",
@@ -45,6 +60,9 @@ export const INITIAL_TEAMS = [
       wins: 12,
       losses: 8,
     },
+    wins: 12,
+    losses: 8,
+    currentSeasonStats: { ...DEFAULT_CURRENT_SEASON_STATS },
   },
   {
     id: "t_laa",
@@ -62,6 +80,9 @@ export const INITIAL_TEAMS = [
       wins: 14,
       losses: 6,
     },
+    wins: 14,
+    losses: 6,
+    currentSeasonStats: { ...DEFAULT_CURRENT_SEASON_STATS },
   },
   {
     id: "t_mia",
@@ -77,6 +98,9 @@ export const INITIAL_TEAMS = [
       wins: 8,
       losses: 12,
     },
+    wins: 8,
+    losses: 12,
+    currentSeasonStats: { ...DEFAULT_CURRENT_SEASON_STATS },
   },
   {
     id: "t_tok",
@@ -92,6 +116,9 @@ export const INITIAL_TEAMS = [
       wins: 13,
       losses: 7,
     },
+    wins: 13,
+    losses: 7,
+    currentSeasonStats: { ...DEFAULT_CURRENT_SEASON_STATS },
   },
   {
     id: "t_par",
@@ -107,6 +134,9 @@ export const INITIAL_TEAMS = [
       wins: 11,
       losses: 9,
     },
+    wins: 11,
+    losses: 9,
+    currentSeasonStats: { ...DEFAULT_CURRENT_SEASON_STATS },
   },
   {
     id: "t_bel",
@@ -122,6 +152,9 @@ export const INITIAL_TEAMS = [
       wins: 12,
       losses: 8,
     },
+    wins: 12,
+    losses: 8,
+    currentSeasonStats: { ...DEFAULT_CURRENT_SEASON_STATS },
   },
   {
     id: "t_ist",
@@ -137,6 +170,9 @@ export const INITIAL_TEAMS = [
       wins: 7,
       losses: 13,
     },
+    wins: 7,
+    losses: 13,
+    currentSeasonStats: { ...DEFAULT_CURRENT_SEASON_STATS },
   },
 ];
 
