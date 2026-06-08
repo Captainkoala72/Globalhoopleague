@@ -1,21 +1,19 @@
 import React, { useState, useEffect, useRef } from "react";
 import { ChevronDown, ChevronUp, Upload } from "lucide-react";
 import { useBetting } from "../context/BettingContext";
+import { calculateMarketOdds } from "../utils/oddsEngine";
 import {
   collection,
   doc,
   addDoc,
   updateDoc,
   getDocs,
-  getDoc,
-  writeBatch
 } from "firebase/firestore";
 import { db } from "../firebase";
 
 import { settleMatch } from "../utils/settlementEngine";
 import { analyzeMatchScreenshot } from "../utils/analyzeMatchScreenshot";
-
-import { LeagueManagement } from "./LeagueManagement";
+import { AIPromptManager } from "./AIPromptManager";
 
 export function AdminPanel() {
   const [activeView, setActiveView] = useState("schedule");
@@ -64,14 +62,14 @@ export function AdminPanel() {
           User Currency
         </button>
         <button
-          onClick={() => setActiveView("league")}
+          onClick={() => setActiveView("ai-prompt")}
           className={`px-4 py-3 text-left font-bold uppercase text-sm border-l-2 transition-all ${
-            activeView === "league"
+            activeView === "ai-prompt"
               ? "border-[#c1ff00] text-white bg-white/5"
               : "border-transparent text-white/40 hover:text-white hover:bg-white/5"
           }`}
         >
-          League Management
+          AI Prompt Control
         </button>
       </div>
 
@@ -80,7 +78,7 @@ export function AdminPanel() {
         {activeView === "calculator" && <OddsCalculatorView />}
         {activeView === "settle" && <SettleMatchesView />}
         {activeView === "users" && <UserCurrencyView />}
-        {activeView === "league" && <LeagueManagement />}
+        {activeView === "ai-prompt" && <AIPromptManager />}
       </div>
     </div>
   );
@@ -219,143 +217,182 @@ function ScheduleMatchesView() {
 }
 
 function OddsCalculatorView() {
-  const { teams, weights, updateWeights, scheduledMatchups } = useBetting();
+  const { teams, weights, updateTeams, updateWeights, scheduledMatchups } =
+    useBetting();
   const [selectedMatchupId, setSelectedMatchupId] = useState("");
   const selectedMatchup = scheduledMatchups.find(
     (m) => m.id === selectedMatchupId,
   );
-
+  // Local state for live preview
+  const [localTeams, setLocalTeams] = useState(teams);
   const [localWeights, setLocalWeights] = useState(weights);
+  const [openPlayoffStats, setOpenPlayoffStats] = useState({});
+
+  // AI Influence State
+  const [aiWeight, setAiWeight] = useState(0);
+  const [aiProb, setAiProb] = useState<number | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
-  const [projectedData, setProjectedData] = useState<any>(null);
+  const [allCoaches, setAllCoaches] = useState<any[]>([]);
 
-  const [homeOffense, setHomeOffense] = useState(2.5);
-  const [homeDefense, setHomeDefense] = useState(2.5);
-  const [awayOffense, setAwayOffense] = useState(2.5);
-  const [awayDefense, setAwayDefense] = useState(2.5);
+  useEffect(() => {
+    // Fetch coaches for AI prompt context
+    import("firebase/firestore").then(({ collection, getDocs }) => {
+      getDocs(collection(db, "coaches")).then(snap => {
+        setAllCoaches(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      }).catch(console.error);
+    });
+  }, []);
 
-  const homeAverageStar = (homeOffense + homeDefense) / 2;
-  const awayAverageStar = (awayOffense + awayDefense) / 2;
-
-  const currentHomeTeam = selectedMatchup
-    ? teams.find((t) => t.id === selectedMatchup.homeTeam.id)
-    : null;
-  const currentAwayTeam = selectedMatchup
-    ? teams.find((t) => t.id === selectedMatchup.awayTeam.id)
-    : null;
+  useEffect(() => {
+    setLocalTeams(teams);
+  }, [teams]);
 
   useEffect(() => {
     setLocalWeights(weights);
   }, [weights]);
 
+  // Reset AI state when matchup changes
   useEffect(() => {
-    setProjectedData(null);
+    setAiProb(null);
+    setAiWeight(0);
   }, [selectedMatchupId]);
 
-  const handleWeightChange = (key: string, value: number) => {
-    setLocalWeights((prev: any) => ({ ...prev, [key]: value }));
+  const handleWeightChange = (key, value) => {
+    setLocalWeights((prev) => ({ ...prev, [key]: value }));
   };
 
-    const handleGenerateAI = async () => {
+  const handleTeamStatChange = (teamId, statKey, value) => {
+    setLocalTeams((prev) =>
+      prev.map((t) => {
+        if (t.id === teamId) {
+          return {
+            ...t,
+            stats: {
+              ...t.stats,
+              [statKey]: value,
+            },
+          };
+        }
+        return t;
+      }),
+    );
+  };
+
+  const handleTeamPlayoffStatChange = (teamId, statKey, value) => {
+    setLocalTeams((prev) =>
+      prev.map((t) => {
+        if (t.id === teamId) {
+          return {
+            ...t,
+            playoffStats: {
+              ...(t.playoffStats || {}),
+              [statKey]: value,
+            },
+          };
+        }
+        return t;
+      }),
+    );
+  };
+
+  const currentHomeTeam = selectedMatchup
+    ? localTeams.find((t) => t.id === selectedMatchup.homeTeam.id)
+    : null;
+  const currentAwayTeam = selectedMatchup
+    ? localTeams.find((t) => t.id === selectedMatchup.awayTeam.id)
+    : null;
+
+  const currentOdds =
+    currentHomeTeam && currentAwayTeam
+      ? calculateMarketOdds(currentHomeTeam, currentAwayTeam, localWeights, { aiProb, aiWeight })
+      : null;
+
+  const handleGenerateAI = async () => {
     if (!currentHomeTeam || !currentAwayTeam) return;
     setIsAiLoading(true);
     try {
-      // Fetch match insights for storylines
-      const matchesSnap = await getDocs(collection(db, "matches"));
-      const allCompleted = matchesSnap.docs
-          .map(doc => doc.data())
-          .filter(m => m.status === "completed" && m.matchInsights);
-          
-      const homeInsights = allCompleted
-          .filter((m: any) => m.homeTeamId === currentHomeTeam.id || m.awayTeamId === currentHomeTeam.id)
-          .slice(-10) // recency window 5-10 matches
-          .map((m: any) => {
-            const isHome = m.homeTeamId === currentHomeTeam.id;
-            return { narrative: m.matchInsights.gameNarrative, stats: isHome ? m.matchInsights.teamStats?.home : m.matchInsights.teamStats?.away };
-          });
-          
-      const awayInsights = allCompleted
-          .filter((m: any) => m.homeTeamId === currentAwayTeam.id || m.awayTeamId === currentAwayTeam.id)
-          .slice(-10)
-          .map((m: any) => {
-            const isHome = m.homeTeamId === currentAwayTeam.id;
-            return { narrative: m.matchInsights.gameNarrative, stats: isHome ? m.matchInsights.teamStats?.home : m.matchInsights.teamStats?.away };
-          });
-
-      // Head to Head history
-      const headToHeadHistory = allCompleted
-          .filter((m: any) => (m.homeTeamId === currentHomeTeam.id && m.awayTeamId === currentAwayTeam.id) || (m.homeTeamId === currentAwayTeam.id && m.awayTeamId === currentHomeTeam.id))
-          .map((m: any) => ({
-             home: m.homeTeamId === currentHomeTeam.id ? m.homeTeamId : m.awayTeamId,
-             away: m.awayTeamId === currentAwayTeam.id ? m.awayTeamId : m.homeTeamId,
-             homeWin: m.homeWinProb > (1 - m.homeWinProb) // simplification
-          }));
-
-      // Fetch coaches
-      const coachesSnap = await getDocs(collection(db, "coaches"));
-      const allCoaches = coachesSnap.docs.map(doc => doc.data());
       const homeCoach = allCoaches.find(c => c.teamName === currentHomeTeam.name);
       const awayCoach = allCoaches.find(c => c.teamName === currentAwayTeam.name);
 
-      const payload = {
-        homeTeamData: {
-          name: currentHomeTeam.name,
-          wins: currentHomeTeam.wins || 0,
-          losses: currentHomeTeam.losses || 0,
-          manualStarRatings: {
-            offense: homeOffense,
-            defense: homeDefense,
-            average: homeAverageStar
-          },
-          rollingStats: currentHomeTeam.currentSeasonStats || {},
-          recentNarratives: homeInsights
-        },
-        awayTeamData: {
-          name: currentAwayTeam.name,
-          wins: currentAwayTeam.wins || 0,
-          losses: currentAwayTeam.losses || 0,
-          manualStarRatings: {
-            offense: awayOffense,
-            defense: awayDefense,
-            average: awayAverageStar
-          },
-          rollingStats: currentAwayTeam.currentSeasonStats || {},
-          recentNarratives: awayInsights
-        },
-        headToHeadHistory,
-        coachPlaystyles: {
-          homeCoach: homeCoach || null,
-          awayCoach: awayCoach || null
-        },
-        sliderWeights: localWeights
-      };
+      let homeInsights: any[] = [];
+      let awayInsights: any[] = [];
+      try {
+        const matchesSnap = await getDocs(collection(db, "matches"));
+        const allCompleted = matchesSnap.docs
+            .map(doc => doc.data())
+            .filter(m => m.status === "completed" && m.matchInsights);
+            
+        homeInsights = allCompleted
+            .filter((m: any) => m.homeTeamId === currentHomeTeam.id || m.awayTeamId === currentHomeTeam.id)
+            .slice(-10) // recency window 10 matches
+            .map((m: any) => {
+              const isHome = m.homeTeamId === currentHomeTeam.id;
+              return { 
+                narrative: m.matchInsights.gameNarrative, 
+                stats: isHome ? m.matchInsights.teamStats?.home : m.matchInsights.teamStats?.away 
+              };
+            });
+            
+        awayInsights = allCompleted
+            .filter((m: any) => m.homeTeamId === currentAwayTeam.id || m.awayTeamId === currentAwayTeam.id)
+            .slice(-10)
+            .map((m: any) => {
+              const isHome = m.homeTeamId === currentAwayTeam.id;
+              return { 
+                narrative: m.matchInsights.gameNarrative, 
+                stats: isHome ? m.matchInsights.teamStats?.home : m.matchInsights.teamStats?.away 
+              };
+            });
+      } catch (err) {
+        console.error("Failed to fetch match insights", err);
+      }
+
+      const prompt = `Act as a sharp Vegas oddsmaker. Analyze this matchup and output JSON with the "homeWinProb".
+      
+Analytical Guardrails:
+1. Strict Recency Window: Strictly analyze team history and trend data from only the last 5 to 10 matches. Any statistical data or performance history older than 10 matches is completely irrelevant to current trends and must be ignored.
+2. Situational & Behavioral Weighting: When calculating the win probability, heavily factor in the historical gameNarrative data from recent matches. If a team has a trend of '4th Quarter Comebacks', give them a slight probability boost in tight matchups. If they suffer from '3rd Quarter Collapses', negatively weight their spread. Evaluate and adjust the probability based on specific team personalities and situational factors, including:
+  - Clutch Factor: Whether a team excels or chokes in high-pressure, late-game situations.
+  - Game Margins: Whether a team historically blows out opponents or tends to play exceptionally close, tight games.
+  - Home/Away Splits: Identifying teams that have a heavy home-court advantage versus notable struggles when playing away.
+3. Coaching Matchup: Analyze the coaching attributes. Determine playstyle clashes (e.g., does a Fast Paced offense expose a Conservative defense?). Weigh the Leadership and Motivation stats heavily for underdog scenarios or clutch moments. Adjust the final win probability based on which coach has the tactical advantage.
+4. Playoff Stats Interpretation: If all provided Playoff Stats for a team are exactly 0, this indicates the team has not played any playoff matches yet. You must completely ignore the playoff stats category for this team. Do not apply a penalty, do not factor 0-averages into their rating, and rely strictly on their Regular Season stats and recent 5-10 game team trends instead. If one team has active playoff stats and the other doesn't, evaluate the first team's playoff experience as a standalone asset, without penalizing the other team for their lack of playoff stats.
+
+Team A (Home): ${currentHomeTeam.name}
+Stats: ${JSON.stringify(currentHomeTeam.stats)}
+Playoff Stats: ${JSON.stringify(currentHomeTeam.playoffStats)}
+Recent Insights (Narrative & Stats): ${JSON.stringify(homeInsights)}
+Coach: ${JSON.stringify(homeCoach || "No coach info")}
+
+Team B (Away): ${currentAwayTeam.name}
+Stats: ${JSON.stringify(currentAwayTeam.stats)}
+Playoff Stats: ${JSON.stringify(currentAwayTeam.playoffStats)}
+Recent Insights (Narrative & Stats): ${JSON.stringify(awayInsights)}
+Coach: ${JSON.stringify(awayCoach || "No coach info")}
+`;
 
       let data: any;
+
       const response = await fetch("/api/generate-odds", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ prompt }),
       });
       
       const contentType = response.headers.get("content-type");
       if (!response.ok || !contentType || !contentType.includes("application/json")) {
         console.warn("Backend not available, trying client-side fallback...");
+        // Fallback for static hosting deployments
         const { askForApiKeyAndGenerate } = await import("../utils/aiClientFallback");
-        // In fallback we stringify again
-        data = await askForApiKeyAndGenerate(JSON.stringify(payload), "odds");
+        data = await askForApiKeyAndGenerate(prompt, "odds");
       } else {
         data = await response.json();
       }
 
-      if (data.homeWinProb !== undefined) {
-        setProjectedData({
-           ...data,
-           homeWinProb: data.homeWinProb > 1 ? data.homeWinProb / 100 : data.homeWinProb,
-           homeAmericanOdds: data.homeMoneyline || data.homeAmericanOdds,
-           awayAmericanOdds: data.awayMoneyline || data.awayAmericanOdds,
-           spreadHome: data.spreadPick ? (data.spreadPick.includes(currentHomeTeam.name.substring(0,3)) ? data.spreadValue : (data.spreadValue.startsWith('-') ? data.spreadValue.replace('-','+') : '-' + data.spreadValue.replace('+',''))) : data.spreadHome,
-           spreadAway: data.spreadPick ? (data.spreadPick.includes(currentAwayTeam.name.substring(0,3)) ? data.spreadValue : (data.spreadValue.startsWith('-') ? data.spreadValue.replace('-','+') : '-' + data.spreadValue.replace('+',''))) : data.spreadAway,
-        });
+      if (data.homeWinProb) {
+        setAiProb(data.homeWinProb);
+        // Default to a 50% blend if slider is at 0 so they can see the effect immediately
+        if (aiWeight === 0) setAiWeight(50);
       } else if (data.error) {
         alert("Failed to generate: " + data.error);
       }
@@ -367,25 +404,26 @@ function OddsCalculatorView() {
   };
 
   const handlePublish = async () => {
-    if (!selectedMatchup || !projectedData) return;
+    if (!selectedMatchup || !currentOdds) return;
     try {
+      // Save global engine state just in case
+      await updateTeams(localTeams);
       await updateWeights(localWeights);
 
+      // Update match document
       const matchRef = doc(db, "matches", selectedMatchup.id);
       await updateDoc(matchRef, {
         status: "active",
-        homeWinProb: projectedData.homeWinProb,
-        awayWinProb: 1 - projectedData.homeWinProb,
-        spreadAway: { label: projectedData.spreadAway, odds: projectedData.awayAmericanOdds },
-        spreadHome: { label: projectedData.spreadHome, odds: projectedData.homeAmericanOdds },
-        moneylineAway: { label: projectedData.awayAmericanOdds, prob: 1 - projectedData.homeWinProb },
-        moneylineHome: { label: projectedData.homeAmericanOdds, prob: projectedData.homeWinProb },
+        awayWinProb: currentOdds.awayWinProb,
+        homeWinProb: currentOdds.homeWinProb,
+        spreadAway: currentOdds.spreadAway,
+        spreadHome: currentOdds.spreadHome,
+        moneylineAway: currentOdds.moneylineAway,
+        moneylineHome: currentOdds.moneylineHome,
         oddsCalculatorData: {
-          manualStars: {
-            home: { off: homeOffense, def: homeDefense, avg: homeAverageStar },
-            away: { off: awayOffense, def: awayDefense, avg: awayAverageStar }
-          },
-          weightsUsed: localWeights
+          baseWinProb: currentOdds.baseWinProb || currentOdds.homeWinProb, // Assuming oddsEngine returns this now
+          aiWinProb: aiProb,
+          aiWeight: aiWeight,
         }
       });
       alert("Match published to active markets!");
@@ -394,32 +432,6 @@ function OddsCalculatorView() {
       console.error(err);
       alert("Failed to publish match.");
     }
-  };
-
-  const renderSeasonAverages = (team: any) => {
-    const stats = team?.currentSeasonStats || {};
-    const items = [
-      { label: "Record", val: `${team?.wins || 0} - ${team?.losses || 0}` },
-      { label: "FG%", val: stats.fgPct?.toFixed(1) || "0.0" },
-      { label: "3PT%", val: stats.threePtPct?.toFixed(1) || "0.0" },
-      { label: "FT%", val: stats.ftPct?.toFixed(1) || "0.0" },
-      { label: "REB", val: stats.rebounds?.toFixed(1) || "0.0" },
-      { label: "AST", val: stats.assists?.toFixed(1) || "0.0" },
-      { label: "PF", val: stats.fouls?.toFixed(1) || "0.0" },
-      { label: "STL", val: stats.steals?.toFixed(1) || "0.0" },
-      { label: "TOV", val: stats.turnovers?.toFixed(1) || "0.0" },
-      { label: "BLK", val: stats.blocks?.toFixed(1) || "0.0" },
-    ];
-    return (
-      <div className="grid grid-cols-2 sm:grid-cols-5 md:grid-cols-5 gap-3 text-sm">
-        {items.map((it, idx) => (
-          <div key={idx} className="bg-black/40 p-2 rounded-lg text-center border border-white/5">
-            <span className="text-white/40 block text-[10px] sm:text-xs font-bold tracking-wider uppercase mb-1">{it.label}</span>
-            <span className="text-white font-mono font-medium">{it.val}</span>
-          </div>
-        ))}
-      </div>
-    );
   };
 
   return (
@@ -442,10 +454,10 @@ function OddsCalculatorView() {
           <select
             value={selectedMatchupId}
             onChange={(e) => setSelectedMatchupId(e.target.value)}
-            className="w-full bg-black/40 border border-white/10 rounded-lg py-3 px-4 text-sm font-bold text-white focus:outline-none focus:border-[#c1ff00] transition-colors appearance-none cursor-pointer"
+            className="w-full bg-black/40 border border-white/10 rounded-lg py-3 px-4 text-sm font-bold text-white focus:outline-none focus:border-[#c1ff00] transition-colors appearance-none"
           >
             <option value="">-- Choose a scheduled match --</option>
-            {scheduledMatchups.map((m: any) => (
+            {scheduledMatchups.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.awayTeam.name} @ {m.homeTeam.name} - {m.startTime}
               </option>
@@ -456,42 +468,177 @@ function OddsCalculatorView() {
 
       {selectedMatchupId &&
         currentHomeTeam &&
-        currentAwayTeam && (
+        currentAwayTeam &&
+        currentOdds && (
           <>
+            <div className="glass-card p-6 bg-gradient-to-br from-[#c1ff00]/10 to-transparent border border-[#c1ff00]/20">
+              <h3 className="text-lg font-black italic uppercase text-[#c1ff00] mb-4">
+                Live Odds Preview
+              </h3>
+              <div className="grid grid-cols-2 gap-8 text-center">
+                <div>
+                  <p className="text-sm font-bold uppercase text-white/50 mb-2">
+                    Away: {currentAwayTeam.name}
+                  </p>
+                  <div className="flex justify-center gap-4 text-sm font-mono text-white">
+                    <span>Spread: {currentOdds.spreadAway.label}</span>
+                    <span>ML: {currentOdds.moneylineAway.label}</span>
+                    <span>
+                      Win: {(currentOdds.awayWinProb * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-sm font-bold uppercase text-white/50 mb-2">
+                    Home: {currentHomeTeam.name}
+                  </p>
+                  <div className="flex justify-center gap-4 text-sm font-mono text-white">
+                    <span>Spread: {currentOdds.spreadHome.label}</span>
+                    <span>ML: {currentOdds.moneylineHome.label}</span>
+                    <span>
+                      Win: {(currentOdds.homeWinProb * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={handlePublish}
+                className="mt-6 w-full py-4 bg-[#c1ff00] text-black font-black uppercase italic rounded-xl text-lg hover:scale-[0.98] transition-all shadow-[0_0_15px_rgba(193,255,0,0.2)]"
+              >
+                Publish to Active Markets
+              </button>
+            </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-8">
               <div className="space-y-6">
                 <h3 className="text-xl font-black italic uppercase text-white">
                   Matchup Teams Stats
                 </h3>
                 <div className="space-y-4">
-                  {[
-                    { team: currentAwayTeam, type: 'Away', off: awayOffense, def: awayDefense, setOff: setAwayOffense, setDef: setAwayDefense, avg: awayAverageStar },
-                    { team: currentHomeTeam, type: 'Home', off: homeOffense, def: homeDefense, setOff: setHomeOffense, setDef: setHomeDefense, avg: homeAverageStar }
-                  ].map(({ team, type, off, def, setOff, setDef, avg }) => (
+                  {[currentAwayTeam, currentHomeTeam].map((team) => (
                     <div
                       key={team.id}
                       className="glass-card p-4 sm:p-5 flex flex-col gap-4"
                     >
                       <div className="flex justify-between items-center border-b border-white/10 pb-3">
                         <span className="text-lg font-bold uppercase italic text-white">
-                          <span className="text-white/40 mr-2">{type}:</span>
                           {team.name}
                         </span>
-                        <div className="bg-black/50 px-3 py-1 rounded-full text-sm font-mono text-[#c1ff00]">
-                          Avg Star: {avg.toFixed(2)}
-                        </div>
                       </div>
-                      
                       <div className="flex flex-col gap-2">
-                        <h4 className="text-xs font-bold text-[#c1ff00]/60 tracking-wider uppercase mb-2">Live Season Averages Preview</h4>
-                        {renderSeasonAverages(team)}
-                      </div>
-
-                      <div className="mt-4 border-t border-white/10 pt-4 flex flex-col gap-2">
-                        <h4 className="text-xs font-bold text-white/60 tracking-wider uppercase mb-1">Manual Star Ratings (1-5)</h4>
-                        <div className="grid grid-cols-2 gap-4">
-                          <StatInput label={`Offensive Rating`} value={off} step={0.1} min={0} max={5} onChange={setOff} />
-                          <StatInput label={`Defensive Rating`} value={def} step={0.1} min={0} max={5} onChange={setDef} />
+                        <h4 className="text-sm font-bold text-white/60 tracking-wider uppercase mb-1">Season Stats Input</h4>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                          <StatInput
+                            label="Offense"
+                            value={team.stats.offense}
+                            step={0.1}
+                            min={0}
+                            max={5}
+                            onChange={(v) => handleTeamStatChange(team.id, "offense", v)}
+                          />
+                          <StatInput
+                            label="Defense"
+                            value={team.stats.defense}
+                            step={0.1}
+                            min={0}
+                            max={5}
+                            onChange={(v) => handleTeamStatChange(team.id, "defense", v)}
+                          />
+                          <StatInput
+                            label="Overall"
+                            value={team.stats.overall}
+                            step={0.1}
+                            min={0}
+                            max={5}
+                            onChange={(v) => handleTeamStatChange(team.id, "overall", v)}
+                          />
+                          <StatInput
+                            label="PPG"
+                            value={team.stats.ppg}
+                            step={0.1}
+                            onChange={(v) => handleTeamStatChange(team.id, "ppg", v)}
+                          />
+                          <StatInput
+                            label="OPPG"
+                            value={team.stats.oppg}
+                            step={0.1}
+                            onChange={(v) => handleTeamStatChange(team.id, "oppg", v)}
+                          />
+                          <StatInput
+                            label="FG %"
+                            value={team.stats.fgPct}
+                            step={0.1}
+                            onChange={(v) => handleTeamStatChange(team.id, "fgPct", v)}
+                          />
+                          <StatInput
+                            label="3PT %"
+                            value={team.stats.threePtPct}
+                            step={0.1}
+                            onChange={(v) => handleTeamStatChange(team.id, "threePtPct", v)}
+                          />
+                          <StatInput
+                            label="Wins"
+                            value={team.stats.wins}
+                            step={1}
+                            onChange={(v) => handleTeamStatChange(team.id, "wins", v)}
+                          />
+                          <StatInput
+                            label="Losses"
+                            value={team.stats.losses}
+                            step={1}
+                            onChange={(v) => handleTeamStatChange(team.id, "losses", v)}
+                          />
+                        </div>
+                        
+                        <div className="mt-4 border-t border-white/10 pt-4">
+                          <button
+                            className="flex justify-between items-center w-full text-left"
+                            onClick={() => setOpenPlayoffStats(prev => ({ ...prev, [team.id]: !prev[team.id] }))}
+                          >
+                            <h4 className="text-sm font-bold text-white/60 tracking-wider uppercase">Playoff Stats Input</h4>
+                            {openPlayoffStats[team.id] ? <ChevronUp size={16} className="text-white/60"/> : <ChevronDown size={16} className="text-white/60"/>}
+                          </button>
+                          
+                          {openPlayoffStats[team.id] && (
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 mt-4">
+                              <StatInput
+                                label="Playoff PPG"
+                                value={team.playoffStats?.ppg ?? ""}
+                                step={0.1}
+                                onChange={(v) => handleTeamPlayoffStatChange(team.id, "ppg", v)}
+                              />
+                              <StatInput
+                                label="Playoff OPPG"
+                                value={team.playoffStats?.oppg ?? ""}
+                                step={0.1}
+                                onChange={(v) => handleTeamPlayoffStatChange(team.id, "oppg", v)}
+                              />
+                              <StatInput
+                                label="Playoff FG %"
+                                value={team.playoffStats?.fgPct ?? ""}
+                                step={0.1}
+                                onChange={(v) => handleTeamPlayoffStatChange(team.id, "fgPct", v)}
+                              />
+                              <StatInput
+                                label="Playoff 3PT %"
+                                value={team.playoffStats?.threePtPct ?? ""}
+                                step={0.1}
+                                onChange={(v) => handleTeamPlayoffStatChange(team.id, "threePtPct", v)}
+                              />
+                              <StatInput
+                                label="Playoff Wins"
+                                value={team.playoffStats?.wins ?? ""}
+                                step={1}
+                                onChange={(v) => handleTeamPlayoffStatChange(team.id, "wins", v)}
+                              />
+                              <StatInput
+                                label="Playoff Losses"
+                                value={team.playoffStats?.losses ?? ""}
+                                step={1}
+                                onChange={(v) => handleTeamPlayoffStatChange(team.id, "losses", v)}
+                              />
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -506,17 +653,17 @@ function OddsCalculatorView() {
                   </h3>
                   <div className="glass-card p-6 flex flex-col gap-6">
                     <WeightSlider
-                      label="Season Averages"
-                      value={localWeights.seasonAverages}
-                      onChange={(v) => handleWeightChange("seasonAverages", v)}
-                    />
-                    <WeightSlider
                       label="Star Ratings"
                       value={localWeights.starRatings}
                       onChange={(v) => handleWeightChange("starRatings", v)}
                     />
                     <WeightSlider
-                      label="Win/Loss Record"
+                      label="Season Averages"
+                      value={localWeights.seasonAverages}
+                      onChange={(v) => handleWeightChange("seasonAverages", v)}
+                    />
+                    <WeightSlider
+                      label="Record / Win %"
                       value={localWeights.record}
                       onChange={(v) => handleWeightChange("record", v)}
                     />
@@ -535,64 +682,27 @@ function OddsCalculatorView() {
                     <button
                       onClick={handleGenerateAI}
                       disabled={isAiLoading}
-                      className="w-full py-4 bg-[#c1ff00]/20 border border-[#c1ff00]/50 text-[#c1ff00] font-black uppercase italic rounded-xl text-sm hover:bg-[#c1ff00]/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2 shadow-[0_0_15px_rgba(193,255,0,0.1)]"
+                      className="w-full py-4 bg-indigo-500/20 border border-indigo-500/50 text-indigo-400 font-black uppercase italic rounded-xl text-sm hover:bg-indigo-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
                     >
-                      {isAiLoading ? "Processing Matchup..." : "Generate AI Projection"}
+                      {isAiLoading ? "Thinking (Gemini)..." : "Generate AI Projection"}
                     </button>
                     
-                    {projectedData !== null && (
-                      <div className="text-center bg-black/40 p-4 rounded-xl space-y-4 border border-[#c1ff00]/20 shadow-[0_0_20px_rgba(193,255,0,0.1)]">
-                        {projectedData.thinkingLog && (
-                          <div className="text-left bg-black/80 p-4 rounded-lg border border-white/5 text-xs text-white/70 font-mono whitespace-pre-wrap max-h-48 overflow-y-auto mb-4">
-                            <span className="text-[#c1ff00] font-bold uppercase tracking-widest mb-2 block">Oddsmaker Logic:</span>
-                            {projectedData.thinkingLog}
-                          </div>
-                        )}
-                        <div className="space-y-1">
-                          <div className="text-[10px] text-white/50 font-bold uppercase tracking-widest">Home Win Prob</div>
-                          <div className="text-3xl text-white font-mono font-black">{(projectedData.homeWinProb * 100).toFixed(1)}%</div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/10">
-                          <div>
-                            <div className="text-[10px] text-white/40 font-bold uppercase tracking-widest mb-1">Away ML</div>
-                            <div className="text-lg text-[#c1ff00] font-mono font-bold">{projectedData.awayAmericanOdds}</div>
-                          </div>
-                          <div>
-                            <div className="text-[10px] text-white/40 font-bold uppercase tracking-widest mb-1">Home ML</div>
-                            <div className="text-lg text-[#c1ff00] font-mono font-bold">{projectedData.homeAmericanOdds}</div>
-                          </div>
-                          <div>
-                            <div className="text-[10px] text-white/40 font-bold uppercase tracking-widest mb-1">Away Spread</div>
-                            <div className="text-lg text-white font-mono font-bold">{projectedData.spreadAway}</div>
-                          </div>
-                          <div>
-                            <div className="text-[10px] text-white/40 font-bold uppercase tracking-widest mb-1">Home Spread</div>
-                            <div className="text-lg text-white font-mono font-bold">{projectedData.spreadHome}</div>
-                          </div>
-                        </div>
+                    {aiProb !== null && (
+                      <div className="text-center bg-black/40 p-4 rounded-xl space-y-1">
+                        <div className="text-xs text-indigo-300 font-bold uppercase tracking-widest">Raw AI Home Win Prob</div>
+                        <div className="text-xl text-white font-mono font-black">{(aiProb * 100).toFixed(1)}%</div>
                       </div>
                     )}
+
+                    <WeightSlider
+                      label="AI Influence Weight"
+                      value={aiWeight}
+                      onChange={(v) => setAiWeight(v)}
+                    />
                   </div>
                 </div>
               </div>
             </div>
-
-            {projectedData && (
-              <div className="glass-card p-6 bg-gradient-to-br from-[#c1ff00]/10 to-transparent border border-[#c1ff00]/20 w-full col-span-full">
-                <h3 className="text-lg font-black italic uppercase text-[#c1ff00] mb-4 text-center">
-                  Review & Publish
-                </h3>
-                <p className="text-center text-sm text-white/70 mb-6">
-                  Verify the AI generated odds before committing to active markets.
-                </p>
-                <button
-                  onClick={handlePublish}
-                  className="w-full md:w-auto md:px-12 mx-auto block py-4 bg-[#c1ff00] text-black font-black uppercase italic rounded-xl text-lg hover:scale-[0.98] transition-all shadow-[0_0_15px_rgba(193,255,0,0.2)]"
-                >
-                  Publish to Active Markets
-                </button>
-              </div>
-            )}
           </>
         )}
     </div>
@@ -601,9 +711,38 @@ function OddsCalculatorView() {
 
 function SettleMatchesView() {
   const { activeMatchups, scheduledMatchups, cancelMatch } = useBetting();
+  const [scores, setScores] = useState({});
   const [loadingId, setLoadingId] = useState(null);
 
   const [cancellingId, setCancellingId] = useState(null);
+
+  const handleScoreChange = (matchId, type, value) => {
+    setScores((prev) => ({
+      ...prev,
+      [matchId]: {
+        ...(prev[matchId] || { home: "", away: "" }),
+        [type]: value,
+      },
+    }));
+  };
+
+  const handleSettle = async (matchId) => {
+    const s = scores[matchId];
+    if (!s || !s.home || !s.away) return alert("Enter both scores!");
+    setLoadingId(matchId);
+    try {
+      // NOTE: Using a placeholder settleMatch here as global context wasn't verified
+      // Wait, let's import or use `settleMatch` correctly. The original code used it.
+      // Actually, wait, `settleMatch` is not in context? Oh, wait. Let me not change it.
+      await settleMatch(matchId, Number(s.home), Number(s.away));
+      alert("Match settled successfully! Payouts distributed.");
+    } catch (e) {
+      console.error(e);
+      alert("Failed to settle match.");
+    } finally {
+      setLoadingId(null);
+    }
+  };
 
   const confirmCancel = async (matchId) => {
     console.log("User confirmed cancellation for:", matchId);
@@ -627,138 +766,30 @@ function SettleMatchesView() {
 
   const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
 
-  const handleFileUpload = async (match: any, event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (matchId: string, event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    setLoadingId(match.id);
+    setLoadingId(matchId);
     try {
-      // Read the txt file client-side
-      const rawText = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = (e) => resolve(e.target?.result as string);
-        reader.onerror = reject;
-        reader.readAsText(file);
-      });
+      const data = await analyzeMatchScreenshot(file);
+      console.log("Extracted Data:", data);
 
-      // Parse the stats locally
-      const { parseBoxScore } = await import("../utils/parseBoxScore");
-      const parsedStats = parseBoxScore(rawText);
-
-      // Send to Gemini
-      const response = await fetch("/api/analyze-boxscore", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ parsedStats, rawText }),
-      });
-
-      if (!response.ok) {
-        throw new Error(await response.text());
+      if (data.quarterScores && data.quarterScores.homeFinal !== undefined && data.quarterScores.awayFinal !== undefined) {
+        handleScoreChange(matchId, "home", data.quarterScores.homeFinal);
+        handleScoreChange(matchId, "away", data.quarterScores.awayFinal);
       }
-      
-      const geminiData = await response.json();
-      console.log("Gemini Data:", geminiData);
 
-      const batch = writeBatch(db);
-
-      const homeFinal = parsedStats.quarterScores.homeFinal;
-      const awayFinal = parsedStats.quarterScores.awayFinal;
-
-      // 1. Team stats update
-      const updateTeamStats = async (teamId: string, isHome: boolean, teamScore: number, oppScore: number) => {
-        const teamRef = doc(db, "teams", teamId);
-        const teamDoc = await getDoc(teamRef);
-        if (teamDoc.exists()) {
-          const tData = teamDoc.data();
-          const pGames = (tData.wins || 0) + (tData.losses || 0);
-          
-          let newWins = tData.wins || 0;
-          let newLosses = tData.losses || 0;
-          if (teamScore > oppScore) newWins += 1;
-          else if (teamScore < oppScore) newLosses += 1;
-
-          const oldStats = tData.currentSeasonStats || {
-            fgPct: 0, threePtPct: 0, ftPct: 0, rebounds: 0,
-            assists: 0, fouls: 0, steals: 0, turnovers: 0, blocks: 0
-          };
-
-          const incomingParsed = isHome ? parsedStats.teamStats.home : parsedStats.teamStats.away;
-          
-          // helper to parse percentage string like "32/70" -> 0.457
-          const pct = (str: string) => {
-            if (!str) return 0;
-            const parts = str.split(/[\/-]/);
-            const m = parseFloat(parts[0]);
-            const a = parseFloat(parts[1]);
-            return a > 0 ? (m/a)*100 : 0;
-          };
-
-          const newFg = pct(incomingParsed?.fg || "0/0");
-          const new3p = pct(incomingParsed?.threePt || "0/0");
-          const newFt = pct(incomingParsed?.ft || "0/0");
-
-          const moveAvg = (oldV: number, newV: number, count: number) => {
-            return ((oldV * count) + newV) / (count + 1);
-          };
-
-          const currentSeasonStats = {
-            fgPct: moveAvg(oldStats.fgPct, newFg, pGames),
-            threePtPct: moveAvg(oldStats.threePtPct, new3p, pGames),
-            ftPct: moveAvg(oldStats.ftPct, newFt, pGames),
-            rebounds: moveAvg(oldStats.rebounds, incomingParsed?.rebounds || 0, pGames),
-            assists: moveAvg(oldStats.assists, incomingParsed?.assists || 0, pGames),
-            fouls: moveAvg(oldStats.fouls, incomingParsed?.fouls || 0, pGames),
-            steals: moveAvg(oldStats.steals, incomingParsed?.steals || 0, pGames),
-            turnovers: moveAvg(oldStats.turnovers, incomingParsed?.turnovers || 0, pGames),
-            blocks: moveAvg(oldStats.blocks, incomingParsed?.blocks || 0, pGames),
-          };
-
-          batch.update(teamRef, {
-            wins: newWins,
-            losses: newLosses,
-            currentSeasonStats
-          });
-        }
-      };
-
-      await updateTeamStats(match.homeTeamId, true, homeFinal, awayFinal);
-      await updateTeamStats(match.awayTeamId, false, awayFinal, homeFinal);
-
-      // Append narrative to subcollection
-      const stateObj = await getDoc(doc(db, "leagueState", "current"));
-      const seasonYear = stateObj.exists() ? stateObj.data().currentYear : "2026";
-      
-      const historyRef = doc(collection(db, "matches", match.id, "matchHistory"));
-      batch.set(historyRef, {
-        season: seasonYear,
-        parsedStats,
-        geminiData,
-        createdAt: new Date().toISOString()
-      });
-
-      // Also set matchInsights on the match itself (legacy compatibility)
-      const matchRef = doc(db, "matches", match.id);
-      batch.update(matchRef, { 
-        matchInsights: {
-          teamStats: parsedStats.teamStats,
-          gameNarrative: geminiData.gameNarrative,
-          quarterScores: parsedStats.quarterScores
-        }
-      });
-
-      await batch.commit();
-
-      // Finally settle the match payouts
-      await settleMatch(match.id, homeFinal, awayFinal);
-
-      alert("Box score analyzed, team stats updated, and match settled successfully!");
+      const matchRef = doc(db, "matches", matchId);
+      await updateDoc(matchRef, { matchInsights: data });
+      alert("Match insights extracted and saved!");
     } catch (e: any) {
       console.error(e);
       alert("Failed to extract data: " + e.message);
     } finally {
       setLoadingId(null);
-      if (fileInputRefs.current[match.id]) {
-        fileInputRefs.current[match.id]!.value = "";
+      if (fileInputRefs.current[matchId]) {
+        fileInputRefs.current[matchId]!.value = "";
       }
     }
   };
@@ -811,7 +842,27 @@ function SettleMatchesView() {
                   </span>
                   
                   {m.status === "active" ? (
-                    <span className="text-white/40 font-black text-xs px-2">@</span>
+                    <>
+                      <input
+                        type="number"
+                        placeholder="Away Score"
+                        value={scores[m.id]?.away || ""}
+                        onChange={(e) =>
+                          handleScoreChange(m.id, "away", e.target.value)
+                        }
+                        className="w-24 bg-black border border-white/20 rounded-lg py-2 px-3 text-lg font-mono text-center text-white focus:outline-none focus:border-[#c1ff00]"
+                      />
+                      <span className="text-white/40 font-black text-xs px-2">@</span>
+                      <input
+                        type="number"
+                        placeholder="Home Score"
+                        value={scores[m.id]?.home || ""}
+                        onChange={(e) =>
+                          handleScoreChange(m.id, "home", e.target.value)
+                        }
+                        className="w-24 bg-black border border-white/20 rounded-lg py-2 px-3 text-lg font-mono text-center text-white focus:outline-none focus:border-[#c1ff00]"
+                      />
+                    </>
                   ) : (
                     <span className="text-white/40 font-black text-xs px-2">@</span>
                   )}
@@ -829,20 +880,28 @@ function SettleMatchesView() {
                   <div className="relative w-full md:w-auto">
                     <input
                       type="file"
-                      accept=".txt"
+                      accept="image/*"
                       ref={(el) => { fileInputRefs.current[m.id] = el; }}
-                      onChange={(e) => handleFileUpload(m, e)}
+                      onChange={(e) => handleFileUpload(m.id, e)}
                       className="hidden"
                       id={`file-upload-${m.id}`}
                       disabled={loadingId === m.id}
                     />
                     <label
                       htmlFor={`file-upload-${m.id}`}
-                      className="w-full flex items-center justify-center gap-2 md:w-auto px-6 py-4 bg-[#c1ff00]/20 border border-[#c1ff00]/50 text-[#c1ff00] font-black uppercase italic rounded-xl text-sm hover:bg-[#c1ff00]/30 transition-all cursor-pointer whitespace-nowrap shadow-[0_0_15px_rgba(193,255,0,0.15)]"
+                      className="w-full flex items-center justify-center gap-2 md:w-auto px-6 py-4 bg-indigo-500/20 border border-indigo-500/50 text-indigo-400 font-black uppercase italic rounded-xl text-sm hover:bg-indigo-500/30 transition-all cursor-pointer whitespace-nowrap"
                     >
-                      <Upload size={18} /> {loadingId === m.id ? "Processing Box Score..." : "Upload & Settle Match (.txt)"}
+                      <Upload size={18} /> Extract AI
                     </label>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => handleSettle(m.id)}
+                    disabled={loadingId === m.id}
+                    className="w-full md:w-auto px-6 py-4 bg-[#c1ff00] text-black font-black uppercase italic rounded-xl text-sm hover:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap cursor-pointer pointer-events-auto"
+                  >
+                    {loadingId === m.id ? "Processing..." : "Settle"}
+                  </button>
                 </>
               )}
               {cancellingId === m.id ? (

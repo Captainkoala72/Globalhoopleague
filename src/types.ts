@@ -1,39 +1,3 @@
-export interface CurrentSeasonStats {
-  fgPct: number;
-  threePtPct: number;
-  ftPct: number;
-  rebounds: number;
-  assists: number;
-  fouls: number;
-  steals: number;
-  turnovers: number;
-  blocks: number;
-}
-
-export interface TeamStats {
-  offense: number;
-  defense: number;
-  overall: number;
-  ppg: number;
-  oppg: number;
-  fgPct: number;
-  threePtPct: number;
-  topg: number;
-  wins: number;
-  losses: number;
-}
-
-export interface Team {
-  id: string;
-  name: string;
-  conference: string;
-  stats: TeamStats;
-  playoffStats?: Partial<TeamStats>;
-  wins?: number;
-  losses?: number;
-  currentSeasonStats?: CurrentSeasonStats;
-}
-
 export interface Match {
   id: string;
   homeTeamId: string;

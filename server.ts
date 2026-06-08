@@ -2,6 +2,26 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
+import fs from "fs";
+import { initializeApp } from "firebase/app";
+import { getFirestore, doc, getDoc } from "firebase/firestore";
+
+// Initialize Firebase for Backend Use
+const configPath = path.resolve(process.cwd(), "firebase-applet-config.json");
+const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+
+const firebaseApp = initializeApp({
+  apiKey: config.apiKey,
+  authDomain: config.authDomain,
+  projectId: config.projectId,
+  storageBucket: config.storageBucket,
+  messagingSenderId: config.messagingSenderId,
+  appId: config.appId,
+});
+
+const db = getFirestore(firebaseApp, config.firestoreDatabaseId);
+
+const DEFAULT_SYSTEM_PROMPT = "You are a sharp Vegas oddsmaker. You must approach every matchup with an absolute mathematical baseline of 0-0. Do not automatically favor the away team or assume an implicit advantage. Evaluate home-court advantage strictly as a defined, isolated metric value (e.g., +2.5 to +3 points to the point spread for the home team, or a minor percentage bump to win probability), rather than letting it or any hidden bias skew the overall calculation mechanics. Analyze the matchup stats, consider betting trends, and output ONLY a JSON object containing a raw predicted win probability for the Home Team. No extra reasoning.";
 
 async function startServer() {
   const app = express();
@@ -34,126 +54,48 @@ async function startServer() {
 
   app.post("/api/generate-odds", async (req, res) => {
     try {
-      const payload = req.body;
-      const { homeTeamData, awayTeamData, headToHeadHistory, coachPlaystyles, sliderWeights } = payload;
-      
+      const { prompt } = req.body;
       const ai = new GoogleGenAI({
         apiKey: process.env.GEMINI_API_KEY,
         httpOptions: {
           headers: { 'User-Agent': 'aistudio-build' }
         }
       });
-
-      const isWeek1 = homeTeamData?.wins === 0 && homeTeamData?.losses === 0;
       
-      let systemInstruction = `You are an expert, highly analytical Vegas oddsmaker.
-The Neutral Baseline Rule: You must approach every matchup with an absolute 0-0 mathematical baseline. There must be zero implicit bias toward the Away or Home team. Home court advantage must strictly be applied as an isolated, modular boost based on the frontend slider weight.
-
-Factor Weighing Instructions: Evaluate the matchup using the provided data points:
-- Compare the rolling percentages (FG%, 3PT%, FTM%, TOT%, A%, PF%, ST%, TO%, BS%).
-- Read the recent narrative arrays to adjust probabilities for clutch comebacks, 3rd-quarter chokes, and consistent standout/weak player performances.
-- Compare the Coach Playstyles to determine tactical advantages (e.g., a fast-paced coach vs. a slow defensive coach).
-
-You must output a strictly formatted JSON object with no extra reasoning text outside of the thinkingLog parameter.`;
-
-      if (isWeek1) {
-        systemInstruction += `
-
-CRITICAL CONTEXT: This is Week 1 of a new season. The team's rolling percentage stats and narrative arrays are currently 0 or empty. You MUST completely ignore the lack of season stats. Base your entire calculation on the provided Coach Playstyles, the calculated Star Ratings, and the Historical Head-to-Head trends.`;
+      // Dynamic Firestore fetch with fallback guardrail
+      let systemInstruction = DEFAULT_SYSTEM_PROMPT;
+      try {
+        const docRef = doc(db, "config", "aiSettings");
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists() && docSnap.data().systemPrompt) {
+          systemInstruction = docSnap.data().systemPrompt;
+        }
+      } catch (err) {
+        console.warn("Firestore fetch error in dynamic OddsCalculator backend, using baseline fallback:", err);
       }
-      
-      const prompt = `Analyze this exact matchup payload and generate strict odds based on these factors.\n\nPayload: ${JSON.stringify(payload, null, 2)}`;
       
       const response = await ai.models.generateContent({
         model: "gemini-3.5-flash",
         contents: prompt,
         config: {
-          systemInstruction,
+          systemInstruction: systemInstruction,
           responseMimeType: "application/json",
           responseSchema: {
             type: "OBJECT",
             properties: {
               homeWinProb: {
                 type: "NUMBER",
-                description: "Predicted win probability for the Home Team as a number between 0 and 100."
-              },
-              moneylinePick: {
-                type: "STRING",
-                description: "Team abbreviation for the moneyline pick."
-              },
-              homeMoneyline: {
-                type: "STRING",
-                description: "Strictly formatted American moneyline odds string for the home team (e.g., '-110', '+150')."
-              },
-              awayMoneyline: {
-                type: "STRING",
-                description: "Strictly formatted American moneyline odds string for the away team (e.g., '-110', '+150')."
-              },
-              spreadPick: {
-                type: "STRING",
-                description: "Team abbreviation for the spread pick."
-              },
-              spreadValue: {
-                type: "STRING",
-                description: "Point spread value for the pick (e.g., '-4.5', '+4.5')."
-              },
-              thinkingLog: {
-                type: "STRING",
-                description: "A detailed 4-to-5 paragraph explanation of exactly how you weighed the stats, narratives, and head-to-head history to reach these numbers."
+                description: "Predicted win probability for the Home Team as a decimal between 0.01 and 0.99"
               }
             },
-            required: ["homeWinProb", "moneylinePick", "homeMoneyline", "awayMoneyline", "spreadPick", "spreadValue", "thinkingLog"]
+            required: ["homeWinProb"]
           }
         }
       });
-      
-      const resultObj = JSON.parse(response.text || "{}");
-      res.json(resultObj);
+
+      res.json(JSON.parse(response.text));
     } catch (error: any) {
       console.error("AI Odds Generation Error:", error);
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  app.post("/api/analyze-boxscore", async (req, res) => {
-    try {
-      const { parsedStats, rawText } = req.body;
-      const ai = new GoogleGenAI({
-        apiKey: process.env.GEMINI_API_KEY,
-        httpOptions: {
-          headers: { 'User-Agent': 'aistudio-build' }
-        }
-      });
-      
-      const promptText = `Analyze this parsed basketball game data and raw box score text. Return a strict JSON object evaluating the following qualitative factors.
-
-Parsed Stats: ${JSON.stringify(parsedStats)}
-Raw Box Score Text:
-${rawText}`;
-
-      const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash", // Match existing model in project
-        contents: promptText,
-        config: {
-          systemInstruction: "Analyze this parsed basketball game data and raw box score text. Return a strict JSON object evaluating the following qualitative factors:\ngameNarrative: A short, descriptive string of the game flow (e.g., 'Wire-to-wire blowout', 'Defensive grind').\nclutchTeam: The abbreviation of the team if they executed a significant 4th-quarter comeback to win, otherwise null.\nchokedTeam: The abbreviation of the team if they held a strong lead in the 1st half but suffered a major collapse to lose, otherwise null.\npacing: Evaluate the team tracking tempo. Return 'Fast' if the total score is exceptionally high for a 12-minute game, or 'Slow' if it was a low-possession, half-court game.\ntopPerformers: An array of strings containing player names who had highly efficient, standout games (look for high points, assists, or positive +/- impact).\nweakPerformers: An array of strings containing player names who struggled significantly (low efficiency, high turnovers, or highly negative +/- impact).",
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: "OBJECT",
-            properties: {
-              gameNarrative: { type: "STRING" },
-              clutchTeam: { type: "STRING" },
-              chokedTeam: { type: "STRING" },
-              pacing: { type: "STRING" },
-              topPerformers: { type: "ARRAY", items: { type: "STRING" } },
-              weakPerformers: { type: "ARRAY", items: { type: "STRING" } },
-            }
-          }
-        }
-      });
-
-      res.json(JSON.parse(response.text || "{}"));
-    } catch (error: any) {
-      console.error("AI Box Score Analysis Error:", error);
       res.status(500).json({ error: error.message });
     }
   });
