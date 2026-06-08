@@ -53,23 +53,43 @@ export async function generateHoopBuzzPost(matchDetails: any) {
 
     // Note: Due to security guidelines, the @google/genai SDK is called server-side via this proxy endpoint.
     let data: any;
-    const response = await fetch("/api/generate-news", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt }),
-    });
+    try {
+      const response = await fetch("/api/generate-news", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt }),
+      });
 
-    const contentType = response.headers.get("content-type");
-    if (!response.ok || !contentType || !contentType.includes("application/json")) {
-        console.warn("Backend not available, trying client-side fallback...");
-        const { askForApiKeyAndGenerate } = await import("./aiClientFallback");
-        data = await askForApiKeyAndGenerate(prompt, "news");
-    } else {
+      const contentType = response.headers.get("content-type");
+      if (response.ok && contentType && contentType.includes("application/json")) {
         data = await response.json();
+      } else {
+        const errorText = await response.text().catch(() => "Unknown error");
+        throw new Error(`Backend generated response error: ${errorText}`);
+      }
+    } catch (err) {
+      console.warn("Backend unavailable or returned error, executing local rule-based template fallback:", err);
+      
+      const winnerTeam = matchDetails.winner || "the winner";
+      const loserTeam = matchDetails.loser || "the opponent";
+      const scoreString = matchDetails.homeScore && matchDetails.awayScore 
+        ? `${matchDetails.homeScore} - ${matchDetails.awayScore}`
+        : "a absolute thriller";
+      
+      let fallbackText = "";
+      if (author.name === "OG Jackson") {
+        fallbackText = `What a absolute slugfest! ${winnerTeam} takes down ${loserTeam} (${scoreString}). If you bet your hard-earned dimes on ${loserTeam}, you should delete your account because that was a terrible read! Back to the drawing board! #GHL #VegasLines`;
+      } else if (author.name === "Penny Summers") {
+        fallbackText = `The data matches what we saw on the hardwood. ${winnerTeam} matches up nicely and secures the win over ${loserTeam} (${scoreString}). This honors our baseline mathematical predictions. A highly calculated victory! #HoopBuzz #Analytics`;
+      } else { // Arthur Owens
+        fallbackText = `What an absolute thriller of a game! ${winnerTeam} takes the victory against ${loserTeam} with a final score of ${scoreString}! Massive shoutout to everyone who believed and successfully cleared their wagers today! Let's go! #UnderdogMindset`;
+      }
+      
+      data = { text: fallbackText };
     }
     
     // Check if we got text back
-    if (!data.text) {
+    if (!data || !data.text) {
         throw new Error("Failed to extract article text from generation API");
     }
 
